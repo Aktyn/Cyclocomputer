@@ -2,6 +2,11 @@ import framebuf
 
 
 class Font:
+    class ALIGN:
+        LEFT = 0
+        CENTER = 1
+        RIGHT = 2
+
     def __init__(self, buffer: bytearray, buffer_width: int, buffer_height: int, glyphs: dict[str, dict[str, int]],
                  size: int):
         self.__frame_buffer = framebuf.FrameBuffer(
@@ -31,9 +36,25 @@ class Font:
                 )
                 target.pixel(target_x, target_y, pixel)
 
-    def draw(self, text: str, target: framebuf.FrameBuffer, target_width: int, target_height: int, x: int, y: int):
-        pivot_x = target_width - x
-        pivot_y = target_height - y
+    def __measure_text(self, text: str):
+        width = 0
+        for char in text:
+            if char in self.__glyphs:
+                width += self.__glyphs[char]['xadvance']
+        return width
+
+    def draw(self, text: str,
+             target: framebuf.FrameBuffer, target_width: int, target_height: int,
+             offset_x: int, offset_y: int, align: 'Font.ALIGN' = None):
+        text_width = self.__measure_text(text)
+
+        pivot_x = target_width - offset_x
+        pivot_y = target_height - offset_y
+        if align == Font.ALIGN.RIGHT:
+            pivot_x = text_width - offset_x
+        elif align == Font.ALIGN.CENTER or align is None:
+            pivot_x = (target_width + text_width) // 2 - offset_x
+
         for char in text:
             if char in self.__glyphs:
                 glyph = self.__glyphs[char]

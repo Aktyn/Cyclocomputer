@@ -26,6 +26,10 @@ if not mock_epaper():
         def close(self):
             self.__epd.sleep()
 
+        def restart(self):
+            self.__epd.sleep()
+            self.__epd = EPD_2in9()
+
         @property
         def width(self):
             return self.__epd.width
@@ -42,12 +46,22 @@ if not mock_epaper():
                 self.__buffers['logo'][index + offset_top] = bits_order_reverse_lut[bit]
 
             self.__fonts = {
-                'temperature_40px': Font(Images.TEMPERATURE_40PX, 128, 128, Images.TEMPERATURE_40PX_GLYPHS, 40)
+                'temperature_40px': Font(Images.TEMPERATURE_40PX, 128, 128, Images.TEMPERATURE_40PX_GLYPHS, 40),
+                'digits_104px': Font(Images.DIGITS_104PX, 256, 256, Images.DIGITS_104PX_GLYPHS, 104),
             }
 
             self.__buffers['static_area'] = bytearray([0xff] * (self.__epd.height * self.__epd.width // 8))
             self.__frame_buffers['static_area'] = framebuf.FrameBuffer(
                 self.__buffers['static_area'], self.__epd.width, self.__epd.height, framebuf.MONO_HLSB
+            )
+
+            self.__buffers['real_time_data'] = bytearray(
+                [0xff] * ((self.__epd.height - Epaper.__static_area_height) * self.__epd.width // 8)
+            )
+            self.__frame_buffers['real_time_data'] = framebuf.FrameBuffer(
+                self.__buffers['real_time_data'],
+                self.__epd.width, self.__epd.height - Epaper.__static_area_height,
+                framebuf.MONO_HLSB
             )
 
         def clear(self, init_only=False):
@@ -71,27 +85,61 @@ if not mock_epaper():
                 self.__frame_buffers[buffer_name].text(
                     line, (self.__epd.width - text_length) // 2, line_index * Epaper.__line_height, 0x00
                 )
-            self.__epd.display_partial(reverse_bytearray(self.__buffers[buffer_name]), 0,
-                                       y - (len(lines) - 1) * Epaper.__line_height, self.__epd.width,
-                                       Epaper.__line_height * len(lines))
+            self.__epd.display_partial(
+                reverse_bytearray(self.__buffers[buffer_name]),
+                0, y - (len(lines) - 1) * Epaper.__line_height,
+                self.__epd.width, Epaper.__line_height * len(lines)
+            )
 
         def draw_logo(self):
             self.__epd.display_base(self.__buffers['logo'])
 
         def draw_static_area(self, temperature: float):
             self.__frame_buffers['static_area'].fill_rect(
-                0, 0,  # (self.__epd.height - Epaper.__static_area_height) // 2,
-                self.__epd.width, self.__epd.height,  # Epaper.__static_area_height,
+                0, (self.__epd.height - Epaper.__static_area_height),
+                self.__epd.width, Epaper.__static_area_height,
                 0xff
             )
 
             self.__fonts['temperature_40px'].draw(
-                f'${round(temperature, 1)}°C',
+                f'{round(temperature)}°C',
                 self.__frame_buffers['static_area'], self.__epd.width, self.__epd.height,
-                0, self.__static_area_height
+                # 5 pixels of manual offset to make the text better centered vertically
+                0, self.__static_area_height - 5
             )
 
             self.__epd.display_base(self.__buffers['static_area'])
+
+        def draw_speed(self, speed: float, refresh_only_speed_area=False):
+            area_height = (self.__epd.height - Epaper.__static_area_height) // 2
+            self.__frame_buffers['real_time_data'].fill_rect(
+                0, 0 if refresh_only_speed_area else area_height,
+                self.__epd.width, area_height, 0xff
+            )
+
+            # TODO: test speed of it
+            self.__fonts['digits_104px'].draw(
+                f'{round(speed)}',
+                self.__frame_buffers['real_time_data'],
+                self.__epd.width,
+                area_height if refresh_only_speed_area else self.__epd.height - Epaper.__static_area_height,
+                # 22 pixels of manual offset to make the digits better centered vertically
+                0,
+                area_height - 22 if refresh_only_speed_area else area_height - 22
+            )
+
+            if refresh_only_speed_area:
+                self.__epd.display_partial(
+                    self.__buffers['real_time_data'],
+                    0, area_height,
+                    self.__epd.width, area_height
+                )
+            else:
+                self.__epd.display_partial(
+                    self.__buffers['real_time_data'],
+                    0, 0,
+                    self.__epd.width, self.__epd.height - Epaper.__static_area_height
+                )
 
 else:
     class Epaper:

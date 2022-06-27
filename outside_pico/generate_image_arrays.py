@@ -21,7 +21,7 @@ def rgb2d_to_mono_hlsb(rgb_array: list[list[list[int]]], width: int, height: int
 
 
 if __name__ == '__main__':
-    for src in ['./logo.bmp', './temperature_40px.bmp']:
+    for src in ['./logo.bmp', './temperature_40px.bmp', './digits_104px.bmp']:
         img = BMPReader(src)
         print(f"Source: {src}; width: {img.width}; height: {img.height}")
         print(rgb2d_to_mono_hlsb(img.get_pixels(), img.width, img.height))

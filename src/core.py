@@ -37,11 +37,7 @@ class Core:
     def start(self):
         self.__running = True
 
-        # TODO: restore after testing
-        # self.__epaper.draw_logo()
-        self.__epaper.draw_static_area(self.__temperature.get_celsius())
-        sys.exit(0)
-        time.sleep(1)
+        self.__epaper.draw_logo()
 
         top = self.__epaper.height // 2 - 64 + 32
         self.__epaper.draw_text('Cyclocomputer', top)
@@ -53,11 +49,9 @@ class Core:
 
         # refreshed = False
         while self.__running:
-            current_speed = self.__speedometer.current_speed
 
-            # TODO: linearly weighted average of last few temperature measurements
             print(
-                f"Temperature: {self.__temperature.get_celsius()}°C; Speed: {current_speed}km/h"
+                f"Temperature: {self.__temperature.get_celsius()}°C; Speed: {self.__speedometer.current_speed}km/h"
             )
             # if refreshed:
             #     self.__epaper.draw_line(
@@ -70,13 +64,24 @@ class Core:
             #     self.__epaper.draw_logo()
 
             if self.__mode == MODE.DATA_SCREEN:
-                # TODO
-                pass
-            elif current_speed > 0:  # Some activity detected
+                self.__redraw_realtime_data()
+            elif self.__speedometer.current_speed > 0:  # Some activity detected
+                self.__epaper.clear(init_only=True)
                 self.__draw_main_view()
+            # else:
+            #     # TODO: remove after testing
+            #     self.__epaper.clear(init_only=True)
+            #     self.__draw_main_view()
+            #     for s in range(7, 13):
+            #         self.__epaper.draw_speed(s, refresh_only_speed_area=True)
+            #         time.sleep_ms(16)
+            #     sys.exit(0)
 
             try:
-                time.sleep(1)  # TODO: adapt to 1 second since epaper drawing is time consuming
+                if self.__speedometer.current_speed == 0:
+                    time.sleep(1)
+                else:
+                    time.sleep_ms(1)
             except KeyboardInterrupt:
                 break
 
@@ -85,6 +90,10 @@ class Core:
         self.__epaper.draw_static_area(self.__temperature.get_celsius())
 
         self.__mode = MODE.DATA_SCREEN
+
+    def __redraw_realtime_data(self):
+        # TODO: do not redraw if nothing changed
+        self.__epaper.draw_speed(self.__speedometer.current_speed)
 
     def __on_bluetooth_connection(self):
         print("Bluetooth connection established")

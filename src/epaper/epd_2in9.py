@@ -172,9 +172,13 @@ class EPD_2in9:
                 self.send_data(image[i + j * int(self.width / 8)])
         self.turn_on_display()
 
-    def display_base(self, image: bytearray):
+    def display_base(self, image: bytearray, reset_position=False):
         if image is None:
             return
+        if reset_position:
+            self.set_window(0, 0, self.width - 1, self.height - 1)
+            self.set_cursor(0, 0)
+
         self.send_command(0x24)  # WRITE_RAM
         for j in range(0, self.height):
             for i in range(0, int(self.width / 8)):
