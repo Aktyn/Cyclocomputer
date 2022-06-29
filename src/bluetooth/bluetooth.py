@@ -34,7 +34,6 @@ if not mock_bluetooth():
                 else:
                     return
             else:
-                # TODO: check in some intervals
                 if self.__pico_ble.ble_mode_pin.value() == 0:
                     self.__connected = False
                     self.__paired = False
@@ -44,16 +43,15 @@ if not mock_bluetooth():
             if not self.__paired:
                 print("Pairing...")
                 self.__pico_ble.uart.write("Remove the interference")
-                time.sleep_ms(20)  # TODO
+                # time.sleep_ms(20)  # TODO
                 data_rx = self.__pico_ble.uart.read(6)
                 if data_rx == b"ER+7\r\n":
                     print("Enable notify on the mobile phone\r\n")
-                    # time.sleep_ms(1000)
                     self.__delay_next_update(1000)
                 else:
                     # print("The connection is successful")
                     self.__pico_ble.uart.write("The connection is successful")
-                    time.sleep_ms(100)  # TODO
+                    # time.sleep_ms(100)  # TODO
                     self.__paired = True
                     self.__query_info()
                     self.__connection_callback()
@@ -62,11 +60,11 @@ if not mock_bluetooth():
 
             # Receiving data
             if self.__pico_ble.uart.any() > 0:
-                rx_data = self.__pico_ble.uart.read()
-                time.sleep_ms(20)  # TODO
+                data = self.__pico_ble.uart.read()
+                # time.sleep_ms(20)  # TODO
                 # print(rx_data)
-                self.__data_callback(rx_data)
-                self.__pico_ble.uart.write(rx_data)
+                self.__data_callback(data)
+                self.__pico_ble.uart.write(data)
 
         def __query_info(self):
             pass

@@ -1,8 +1,5 @@
 import _thread
 import time
-
-import sys
-
 from src.bluetooth.bluetooth import Bluetooth
 from src.epaper.epaper import Epaper
 from src.speedometer import Speedometer
@@ -19,6 +16,10 @@ class Core:
         self.__running = False
         # TODO: sleeping mode activating after some time without detected activity with logo and some info view
         self.__mode = MODE.WELCOME_SCREEN
+
+        self.__previous_realtime_data: dict[str, float] = {
+            'speed': 0
+        }
 
         self.__temperature = Temperature()
         self.__speedometer = Speedometer(circumference=223)
@@ -49,39 +50,24 @@ class Core:
 
         # refreshed = False
         while self.__running:
-
-            print(
-                f"Temperature: {self.__temperature.get_celsius()}°C; Speed: {self.__speedometer.current_speed}km/h"
-            )
-            # if refreshed:
-            #     self.__epaper.draw_line(
-            #         f"Temp: {round(self.__temperature.get_celsius(), 2)}C\nSpeed: {round(current_speed, 2)}km/h",
-            #         top
-            #     )
-            # elif current_speed > 0:
-            #     refreshed = True
-            #     self.__epaper.clear(init_only=True)
-            #     self.__epaper.draw_logo()
+            # print(
+            #     f"Temperature: {self.__temperature.get_celsius()}°C; Speed: {self.__speedometer.current_speed}km/h"
+            # )
 
             if self.__mode == MODE.DATA_SCREEN:
                 self.__redraw_realtime_data()
+
+                try:
+                    time.sleep_ms(1)
+                except KeyboardInterrupt:
+                    break
+                continue
             elif self.__speedometer.current_speed > 0:  # Some activity detected
                 self.__epaper.clear(init_only=True)
                 self.__draw_main_view()
-            # else:
-            #     # TODO: remove after testing
-            #     self.__epaper.clear(init_only=True)
-            #     self.__draw_main_view()
-            #     for s in range(7, 13):
-            #         self.__epaper.draw_speed(s, refresh_only_speed_area=True)
-            #         time.sleep_ms(16)
-            #     sys.exit(0)
 
             try:
-                if self.__speedometer.current_speed == 0:
-                    time.sleep(1)
-                else:
-                    time.sleep_ms(1)
+                time.sleep(1)
             except KeyboardInterrupt:
                 break
 
@@ -91,8 +77,21 @@ class Core:
 
         self.__mode = MODE.DATA_SCREEN
 
+    def __realtime_data_changed(self):
+        if self.__previous_realtime_data['speed'] != self.__speedometer.current_speed:
+            return True
+
+        return False
+
     def __redraw_realtime_data(self):
-        # TODO: do not redraw if nothing changed
+        data_changed = self.__realtime_data_changed()
+
+        if not data_changed:
+            return
+
+        self.__previous_realtime_data = {
+            'speed': self.__speedometer.current_speed,
+        }
         self.__epaper.draw_speed(self.__speedometer.current_speed)
 
     def __on_bluetooth_connection(self):
