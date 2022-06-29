@@ -43,17 +43,14 @@ if not mock_bluetooth():
             if not self.__paired:
                 print("Pairing...")
                 self.__pico_ble.uart.write("Remove the interference")
-                # time.sleep_ms(20)  # TODO
                 data_rx = self.__pico_ble.uart.read(6)
                 if data_rx == b"ER+7\r\n":
                     print("Enable notify on the mobile phone\r\n")
                     self.__delay_next_update(1000)
                 else:
-                    # print("The connection is successful")
                     self.__pico_ble.uart.write("The connection is successful")
-                    # time.sleep_ms(100)  # TODO
                     self.__paired = True
-                    self.__query_info()
+                    self.__pico_ble.query_basic_info()
                     self.__connection_callback()
 
                 return
@@ -61,58 +58,20 @@ if not mock_bluetooth():
             # Receiving data
             if self.__pico_ble.uart.any() > 0:
                 data = self.__pico_ble.uart.read()
-                # time.sleep_ms(20)  # TODO
                 # print(rx_data)
                 self.__data_callback(data)
                 self.__pico_ble.uart.write(data)
 
-        def __query_info(self):
-            pass
-            # TODO
-            # # Querying Basic Information
-            # Cmd_Process(Baud_Rate_Query)
-            # time.sleep_ms(100)
-            # Cmd_Process(Low_Power_Query)
-            # time.sleep_ms(100)
-            # Cmd_Process(Name_BLE_Query)
-            # time.sleep_ms(100)
-            # Cmd_Process(Name_SPP_Query)
-            # time.sleep_ms(100)
-            # Cmd_Process(ADD_Query)
-            # time.sleep_ms(100)
-            # Cmd_Process(BLE_Switch_Query)
-            # time.sleep_ms(100)
-            # Cmd_Process(SPP_Switch_Query)
-            # time.sleep_ms(100)
-            #
-            # # Change the name of Bluetooth
-            # if Cmd_Process(Name_BLE_Set):
-            #     print("BLE was successfully renamed to : BLE-Waveshare")
-            #     uart.write("BLE was successfully renamed to : BLE-Waveshare")
-            # time.sleep_ms(100)
-            # if Cmd_Process(Name_SPP_Set):
-            #     print("SPP was successfully renamed to : SPP-Waveshare")
-            #     uart.write("SPP was successfully renamed to : SPP-Waveshare")
-            # time.sleep_ms(100)
+        def send_data(self, data: any):
+            self.__pico_ble.uart.write(data)
 
-        # def __start_thread(self):
-        #     self.__running = True
-        #     while self.__running:
-        #         Pico_BLE_init()
-        #         self.__connection_callback()
-        #         while self.__running:
-        #             if uart.any() > 0:
-        #                 rx_data = uart.read()
-        #                 time.sleep_ms(20)
-        #                 # print(rx_data)
-        #                 self.__data_callback(rx_data)
-        #                 uart.write(rx_data)
-        #         print("Test xyz")
-        #     return
 else:
     class Bluetooth:
         def __init__(self):
             pass
 
         def update(self):
+            pass
+
+        def send_data(self, data: str):
             pass

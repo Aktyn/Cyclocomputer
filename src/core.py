@@ -1,6 +1,9 @@
 import _thread
+import struct
 import time
+
 from src.bluetooth.bluetooth import Bluetooth
+from src.bluetooth.message import Message
 from src.epaper.epaper import Epaper
 from src.speedometer import Speedometer
 from src.temperature import Temperature
@@ -27,8 +30,9 @@ class Core:
 
         self.__bluetooth = Bluetooth(
             connection_callback=self.__on_bluetooth_connection,
+            # TODO: draw bluetooth disabled icon in place of map until connection will be resored
             disconnect_callback=lambda: print("Bluetooth connection lost"),
-            data_callback=lambda data: print("Received data:", data)
+            data_callback=self.__handle_bluetooth_data
         )
 
     def close(self):
@@ -73,6 +77,9 @@ class Core:
 
     def __draw_main_view(self):
         # TODO: refresh it periodically but not too often
+        print("Requesting settings data")
+        self.__bluetooth.send_data(Message.REQUEST_SETTINGS)
+
         self.__epaper.draw_static_area(self.__temperature.get_celsius())
 
         self.__mode = MODE.DATA_SCREEN
@@ -89,6 +96,12 @@ class Core:
         if not data_changed:
             return
 
+        print("Sending current speed update")
+        data = bytes(Message.CURRENT_SPEED, 'ascii')
+        data += struct.pack('f', self.__speedometer.current_speed)
+        self.__bluetooth.send_data(data)
+        # self.__bluetooth.send_data(Message.CURRENT_SPEED)
+
         self.__previous_realtime_data = {
             'speed': self.__speedometer.current_speed,
         }
@@ -99,6 +112,23 @@ class Core:
         if self.__mode != MODE.DATA_SCREEN:
             self.__epaper.clear(init_only=True)
             self.__draw_main_view()
+
+    def __handle_bluetooth_data(self, data: bytes):
+        # print(f"Received data: {data}")
+
+        # TODO: buffering large data chunks (when raw_data_size exceeds given data bytes)
+
+        try:
+            message = data[0]
+            raw_data_size = (data[1] << 0) + (data[2] << 8) + (data[3] << 16) + (data[4] << 24)
+            raw_data = data[5:5 + raw_data_size]
+            print(f"Received message: {message}; raw data size: {raw_data_size}; raw data: {raw_data}")
+            if message == 1:  # SET_CIRCUMFERENCE
+                circumference = struct.unpack('f', raw_data)[0]
+                self.__speedometer.set_circumference(circumference)
+                print("Circumference set to:", circumference)
+        except Exception as e:
+            print(f"Exception: {e}")
 
     def __second_thread(self):
         while self.__running:
