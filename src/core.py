@@ -3,7 +3,7 @@ import struct
 import time
 
 from src.bluetooth.bluetooth import Bluetooth
-from src.bluetooth.message import Message
+from src.bluetooth.message import Message, STAMP, is_stamp
 from src.epaper.epaper import Epaper
 from src.speedometer import Speedometer
 from src.temperature import Temperature
@@ -21,7 +21,18 @@ class Core:
         self.__mode = MODE.WELCOME_SCREEN
 
         self.__previous_realtime_data: dict[str, float] = {
-            'speed': 0
+            'speed': 0,
+            'altitude': 0,
+            'slope': 0,
+            'heading': 0,
+            'map_preview_changed': False
+        }
+        self.__bluetooth_data_buffer = bytes()
+        self.__map_preview_data = bytes()
+        self.__gps_statistics = {
+            'altitude': 0,
+            'slope': 0,
+            'heading': 0
         }
 
         self.__temperature = Temperature()
@@ -78,14 +89,28 @@ class Core:
     def __draw_main_view(self):
         # TODO: refresh it periodically but not too often
         print("Requesting settings data")
-        self.__bluetooth.send_data(Message.REQUEST_SETTINGS)
+        self.__bluetooth.send_message(Message.REQUEST_SETTINGS)
 
         self.__epaper.draw_static_area(self.__temperature.get_celsius())
 
         self.__mode = MODE.DATA_SCREEN
 
     def __realtime_data_changed(self):
-        if self.__previous_realtime_data['speed'] != self.__speedometer.current_speed:
+        # NOTE the rounding. It should match rounding parameters during realtime data rendering on epaper
+
+        if round(self.__previous_realtime_data['speed']) != round(self.__speedometer.current_speed):
+            return True
+
+        if round(self.__previous_realtime_data['altitude']) != round(self.__gps_statistics['altitude']):
+            return True
+
+        if round(self.__previous_realtime_data['slope'], 1) != round(self.__gps_statistics['slope'], 1):
+            return True
+
+        if round(self.__previous_realtime_data['heading']) != round(self.__gps_statistics['heading']):
+            return True
+
+        if self.__previous_realtime_data['map_preview_changed']:
             return True
 
         return False
@@ -96,16 +121,23 @@ class Core:
         if not data_changed:
             return
 
-        print("Sending current speed update")
-        data = bytes(Message.CURRENT_SPEED, 'ascii')
-        data += struct.pack('f', self.__speedometer.current_speed)
-        self.__bluetooth.send_data(data)
-        # self.__bluetooth.send_data(Message.CURRENT_SPEED)
+        try:
+            print(f"Sending current speed update ({round(self.__speedometer.current_speed, 2)}km/h)")
+            self.__bluetooth.send_message(Message.CURRENT_SPEED, struct.pack('f', self.__speedometer.current_speed))
+        except Exception as e:
+            print(e)
 
-        self.__previous_realtime_data = {
-            'speed': self.__speedometer.current_speed,
-        }
-        self.__epaper.draw_speed(self.__speedometer.current_speed)
+        print("Updating realtime data")
+        self.__previous_realtime_data['speed'] = self.__speedometer.current_speed
+        self.__previous_realtime_data['altitude'] = self.__gps_statistics['altitude']
+        self.__previous_realtime_data['slope'] = self.__gps_statistics['slope']
+        self.__previous_realtime_data['heading'] = self.__gps_statistics['heading']
+        self.__previous_realtime_data['map_preview_changed'] = False
+        self.__epaper.draw_real_time_data(
+            self.__speedometer.current_speed,
+            self.__gps_statistics,
+            self.__map_preview_data
+        )
 
     def __on_bluetooth_connection(self):
         print("Bluetooth connection established")
@@ -113,20 +145,58 @@ class Core:
             self.__epaper.clear(init_only=True)
             self.__draw_main_view()
 
-    def __handle_bluetooth_data(self, data: bytes):
-        # print(f"Received data: {data}")
+    def __handle_message(self, message: int, data: bytes):
+        if message == 1:  # SET_CIRCUMFERENCE
+            circumference = struct.unpack('f', data)[0]
+            self.__speedometer.set_circumference(circumference)
+            print("Circumference set to:", circumference)
+        elif message == 2:  # SET_MAP_PREVIEW
+            print("Updating map preview image")
+            del self.__map_preview_data
+            self.__map_preview_data = data
+            self.__previous_realtime_data['map_preview_changed'] = True
+        elif message == 3:
+            print("Updating GPS statistics (altitude, slope and heading)")
+            self.__gps_statistics['altitude'] = struct.unpack('f', data[:4])[0]
+            self.__gps_statistics['slope'] = struct.unpack('f', data[4:8])[0]
+            self.__gps_statistics['heading'] = struct.unpack('f', data[8:12])[0]
 
-        # TODO: buffering large data chunks (when raw_data_size exceeds given data bytes)
+    def __handle_bluetooth_data(self, data: bytes):
+        print(f"Received {len(data)} bytes")
+        self.__bluetooth_data_buffer += data
+
+        metadata_size = 15
+
+        if len(self.__bluetooth_data_buffer) < len(STAMP):
+            return
+
+        if not is_stamp(self.__bluetooth_data_buffer[:len(STAMP)]):
+            del self.__bluetooth_data_buffer
+            self.__bluetooth_data_buffer = bytes()
+            return
+
+        if len(self.__bluetooth_data_buffer) < metadata_size:
+            return
 
         try:
-            message = data[0]
-            raw_data_size = (data[1] << 0) + (data[2] << 8) + (data[3] << 16) + (data[4] << 24)
-            raw_data = data[5:5 + raw_data_size]
-            print(f"Received message: {message}; raw data size: {raw_data_size}; raw data: {raw_data}")
-            if message == 1:  # SET_CIRCUMFERENCE
-                circumference = struct.unpack('f', raw_data)[0]
-                self.__speedometer.set_circumference(circumference)
-                print("Circumference set to:", circumference)
+            message = self.__bluetooth_data_buffer[len(STAMP)]
+            raw_data_size = (self.__bluetooth_data_buffer[len(STAMP) + 1] << 0) + \
+                            (self.__bluetooth_data_buffer[len(STAMP) + 2] << 8) + \
+                            (self.__bluetooth_data_buffer[len(STAMP) + 3] << 16) + \
+                            (self.__bluetooth_data_buffer[len(STAMP) + 4] << 24)
+            if len(self.__bluetooth_data_buffer) < raw_data_size + metadata_size:
+                print(
+                    f"Awaiting {raw_data_size + metadata_size - len(self.__bluetooth_data_buffer)} more bytes for message {message}")
+                return
+            raw_data = self.__bluetooth_data_buffer[metadata_size:metadata_size + raw_data_size]
+            print(f"Received message: {message}; raw data size: {raw_data_size};")
+            try:
+                self.__handle_message(message, raw_data)
+            except Exception as e:
+                print(e)
+            self.__bluetooth_data_buffer = self.__bluetooth_data_buffer[raw_data_size + metadata_size:]
+            if len(self.__bluetooth_data_buffer) >= metadata_size:
+                self.__handle_bluetooth_data(bytes())
         except Exception as e:
             print(f"Exception: {e}")
 

@@ -110,38 +110,81 @@ if not mock_epaper():
 
             self.__epd.display_base(self.__buffers['static_area'])
 
-        def draw_speed(self, speed: float, refresh_only_speed_area=False):
+        def draw_real_time_data(self, speed: float, gps_statistics: dict[str, float], map_preview: bytes):
             area_height = (self.__epd.height - Epaper.__static_area_height) // 2
             self.__frame_buffers['real_time_data'].fill_rect(
-                0, 0 if refresh_only_speed_area else area_height,
+                0, area_height,
                 self.__epd.width, area_height, 0xff
             )
 
-            # TODO: test speed of it
+            # TODO: check duration of font drawing
             self.__fonts['digits_104px'].draw(
                 f'{round(speed)}',
                 self.__frame_buffers['real_time_data'],
                 self.__epd.width,
-                area_height if refresh_only_speed_area else self.__epd.height - Epaper.__static_area_height,
+                self.__epd.height - Epaper.__static_area_height,
                 # 22 pixels of manual offset to make the digits better centered vertically
                 0,
-                area_height - 22 if refresh_only_speed_area else area_height - 22
+                area_height - 22
             )
 
-            if refresh_only_speed_area:
-                self.__epd.display_partial(
-                    self.__buffers['real_time_data'],
-                    0, area_height,
-                    self.__epd.width, area_height
-                )
-            else:
-                self.__epd.display_partial(
-                    self.__buffers['real_time_data'],
-                    0, 0,
-                    self.__epd.width, self.__epd.height - Epaper.__static_area_height
-                )
+            # self.draw_text('Cyclocomputer', area_height + Epaper.__line_height)
+            gps_statistics_text = 'TEST'
+            text_length = len(gps_statistics_text) * Epaper.__char_width
+            self.__frame_buffers['real_time_data'].text(
+                gps_statistics_text, (self.__epd.width - text_length) // 2, area_height + Epaper.__line_height, 0x00
+            )
+
+            for y in range(Epaper.__line_height):
+                for x in range(self.__epd.width):
+                    index = (area_height + y) * self.__epd.width + x
+                    swap_index = (area_height + Epaper.__line_height - 1 - y) * self.__epd.width + x
+                    swap = self.__buffers['real_time_data'][index]
+                    self.__buffers['real_time_data'][index] = self.__buffers['real_time_data'][swap_index]
+                    self.__buffers['real_time_data'][swap_index] = swap
+
+            for i in range(len(map_preview)):
+                self.__buffers['real_time_data'][i] = map_preview[i]
+
+            self.__epd.display_partial(
+                self.__buffers['real_time_data'],
+                0, 0,
+                self.__epd.width, self.__epd.height - Epaper.__static_area_height
+            )
 
 else:
     class Epaper:
         def __init__(self):
+            pass
+
+        def close(self):
+            pass
+
+        def restart(self):
+            pass
+
+        @property
+        def width(self):
+            return 128
+
+        @property
+        def height(self):
+            return 296
+
+        def __prepare(self):
+            pass
+
+        def clear(self, init_only=False):
+            pass
+
+        def draw_text(self, text: str, y: int):
+            pass
+
+        def draw_logo(self):
+            pass
+
+        def draw_static_area(self, temperature: float):
+            pass
+
+        def draw_real_time_data(self, speed: float, gps_statistics: dict[str, float], map_preview: bytes):
             pass

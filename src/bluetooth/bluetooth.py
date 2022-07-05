@@ -1,5 +1,8 @@
+import struct
 import time
 
+from src.bluetooth.base64 import b64encode
+from src.bluetooth.message import STAMP
 from src.common.utils import mock_bluetooth
 
 if not mock_bluetooth():
@@ -42,13 +45,12 @@ if not mock_bluetooth():
 
             if not self.__paired:
                 print("Pairing...")
-                self.__pico_ble.uart.write("Remove the interference")
+                # self.__pico_ble.uart.write("Remove the interference")
                 data_rx = self.__pico_ble.uart.read(6)
                 if data_rx == b"ER+7\r\n":
                     print("Enable notify on the mobile phone\r\n")
                     self.__delay_next_update(1000)
                 else:
-                    self.__pico_ble.uart.write("The connection is successful")
                     self.__paired = True
                     self.__pico_ble.query_basic_info()
                     self.__connection_callback()
@@ -60,10 +62,16 @@ if not mock_bluetooth():
                 data = self.__pico_ble.uart.read()
                 # print(rx_data)
                 self.__data_callback(data)
-                self.__pico_ble.uart.write(data)
+                # self.__pico_ble.uart.write(data)  # ??
 
-        def send_data(self, data: any):
-            self.__pico_ble.uart.write(data)
+        def send_message(self, message: int, data=bytes()):
+            # TODO: abort sending if not connected
+
+            buffer = STAMP + struct.pack('B', message) + struct.pack('I', len(data)) + data
+            base64 = b64encode(buffer)
+
+            print(f"Sending {len(buffer)} bytes; base64: {base64}")
+            self.__pico_ble.uart.write(base64)
 
 else:
     class Bluetooth:
@@ -73,5 +81,5 @@ else:
         def update(self):
             pass
 
-        def send_data(self, data: str):
+        def send_message(self, message: int, data: bytes):
             pass

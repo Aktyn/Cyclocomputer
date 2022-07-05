@@ -16,7 +16,7 @@ if not mock_speedometer():
             """
             self.__circumference = circumference
             self.__active = False
-            self.__current_speed = 0
+            self.__current_speed = 0.0
             self.__last_active_timestamp = None
             self.__magnetic_sensor = Pin(2, Pin.IN, Pin.PULL_UP)
 
@@ -66,7 +66,7 @@ else:
             """
             Returns the current speed in km/h.
             """
-            return 0
+            return 0.0
 
         def set_circumference(self, circumference: float):
             pass

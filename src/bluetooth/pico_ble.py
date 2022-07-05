@@ -100,11 +100,11 @@ class PicoBLE:
         # Change the name of Bluetooth
         if self.__cmd_process(Name_BLE_Set):
             print("BLE was successfully renamed to : BLE-Waveshare")
-            self.uart.write("BLE was successfully renamed to : BLE-Waveshare")
+            # self.uart.write("BLE was successfully renamed to : BLE-Waveshare")
         time.sleep_ms(100)
         if self.__cmd_process(Name_SPP_Set):
             print("SPP was successfully renamed to : Cyclocomputer")
-            self.uart.write("SPP was successfully renamed to : Waveshare")
+            # self.uart.write("SPP was successfully renamed to : Waveshare")
         time.sleep_ms(100)
 
     def __cmd_process(self, data: bytes):
@@ -118,88 +118,88 @@ class PicoBLE:
                 i = (data_rx[3] - 48) * 10 + data_rx[4] - 48
                 if i == 1:
                     print("Bluetooth baud rate is 9600")
-                    self.uart.write("Bluetooth baud rate is 9600")
+                    # self.uart.write("Bluetooth baud rate is 9600")
                 elif i == 2:
                     print("Bluetooth baud rate is 19200")
-                    self.uart.write("Bluetooth baud rate is 19200")
+                    # self.uart.write("Bluetooth baud rate is 19200")
                 elif i == 3:
                     print("Bluetooth baud rate is 38400")
-                    self.uart.write("Bluetooth baud rate is 38400")
+                    # self.uart.write("Bluetooth baud rate is 38400")
                 elif i == 4:
                     print("Bluetooth baud rate is 57600")
-                    self.uart.write("Bluetooth baud rate is 57600")
+                    # self.uart.write("Bluetooth baud rate is 57600")
                 elif i == 5:
                     print("Bluetooth baud rate is 115200")
-                    self.uart.write("Bluetooth baud rate is 115200")
+                    # self.uart.write("Bluetooth baud rate is 115200")
                 elif i == 6:
                     print("Bluetooth baud rate is 256000")
-                    self.uart.write("Bluetooth baud rate is 256000")
+                    # self.uart.write("Bluetooth baud rate is 256000")
                 elif i == 7:
                     print("Bluetooth baud rate is 512000")
-                    self.uart.write("Bluetooth baud rate is 512000")
+                    # self.uart.write("Bluetooth baud rate is 512000")
                 elif i == 8:
                     print("Bluetooth baud rate is 230400")
-                    self.uart.write("Bluetooth baud rate is 230400")
+                    # self.uart.write("Bluetooth baud rate is 230400")
                 elif i == 9:
                     print("Bluetooth baud rate is 460800")
-                    self.uart.write("Bluetooth baud rate is 460800")
+                    # self.uart.write("Bluetooth baud rate is 460800")
                 elif i == 10:
                     print("Bluetooth baud rate is 1000000")
-                    self.uart.write("Bluetooth baud rate is 1000000")
+                    # self.uart.write("Bluetooth baud rate is 1000000")
                 elif i == 11:
                     print("Bluetooth baud rate is 31250")
-                    self.uart.write("Bluetooth baud rate is 31250")
+                    # self.uart.write("Bluetooth baud rate is 31250")
                 elif i == 12:
                     print("Bluetooth baud rate is 2400")
-                    self.uart.write("Bluetooth baud rate is 2400")
+                    # self.uart.write("Bluetooth baud rate is 2400")
                 elif i == 13:
                     print("Bluetooth baud rate is 4800")
-                    self.uart.write("Bluetooth baud rate is 4800")
+                    # self.uart.write("Bluetooth baud rate is 4800")
         elif data == Low_Power_Query:
             if data_rx[0:5] == b'QL+00':
                 print("Normal operating mode")
-                self.uart.write("Normal operating mode")
+                # self.uart.write("Normal operating mode")
             elif data_rx[0:5] == b'QL+01':
                 print("Low power operation mode")
-                self.uart.write("Low power operation mode")
+                # self.uart.write("Low power operation mode")
         elif (data == Name_BLE_Query) | (data == Name_SPP_Query) | (data == ADD_Query):
             if data_rx[0:3] == b'TM+':
                 print("BLE name is : ")
-                self.uart.write("BLE name is : ")
+                # self.uart.write("BLE name is : ")
                 i = 3
                 while chr(data_rx[i]) != '\r':
                     i = i + 1
                 print("%s" % data_rx[3:i])
-                self.uart.write(data_rx[3:i])
+                # self.uart.write(data_rx[3:i])
             elif data_rx[0:3] == b'TD+':
                 print("SPP name is : ")
-                self.uart.write("SPP name is : ")
+                # self.uart.write("SPP name is : ")
                 i = 3
                 while chr(data_rx[i]) != '\r':
                     i = i + 1
                 print("%s" % data_rx[3:i])
-                self.uart.write(data_rx[3:i])
+                # self.uart.write(data_rx[3:i])
             elif data_rx[0:3] == b'TB+':
                 print("BLE add is : ")
-                self.uart.write("BLE add is : ")
+                # self.uart.write("BLE add is : ")
                 i = 3
                 while chr(data_rx[i]) != '\r':
                     i = i + 1
                 print("%s" % data_rx[3:i])
-                self.uart.write(data_rx[3:i])
+                # self.uart.write(data_rx[3:i])
         elif (data == BLE_Switch_Query) | (data == SPP_Switch_Query):
             if data_rx[0:5] == b'T4+01':
                 print("BLE to open up")
-                self.uart.write("BLE to open up")
+                # self.uart.write("BLE to open up")
             elif data_rx[0:5] == b'T4+00':
                 print("BLE to shut down")
-                self.uart.write("BLE to shut down")
+                # self.uart.write("BLE to shut down")
             elif data_rx[0:5] == b'T5+01':
                 print("SPP to open up");
-                self.uart.write("SPP to open up")
+                # self.uart.write("SPP to open up")
             elif data_rx[0:5] == b'T5+00':
                 print("SPP to shut down")
-                self.uart.write("SPP to shut down")
+                # self.uart.write("SPP to shut down")
         else:
             if data_rx[0:2] == b'OK':
                 return True
