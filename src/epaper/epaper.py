@@ -1,5 +1,19 @@
-from src.common.utils import mock_epaper
+from src.common.utils import mock_epaper, degrees_to_compass_direction
 from src.epaper.common import bits_order_reverse_lut, reverse_bytearray
+
+__arrows = ['⬆', '⬈', '➡', '⬊', '⬇', '⬋', '⬅', '⬉', '⬆']
+
+
+def get_relative_wind_direction_arrow(heading: float, wind_direction: float):
+    degrees = (wind_direction + 180) - heading
+
+    attempt = 0
+    while degrees < 0 and attempt < 64:
+        degrees += 360
+        attempt += 1
+    index = (degrees % 360) / 45.0
+    return __arrows[round(index)]
+
 
 if not mock_epaper():
     import framebuf
@@ -46,7 +60,7 @@ if not mock_epaper():
                 self.__buffers['logo'][index + offset_top] = bits_order_reverse_lut[bit]
 
             self.__fonts = {
-                'temperature_40px': Font(Images.TEMPERATURE_40PX, 128, 128, Images.TEMPERATURE_40PX_GLYPHS, 40),
+                'common_24px': Font(Images.COMMON_24PX, 128, 128, Images.COMMON_24PX_GLYPHS, 24),
                 'digits_104px': Font(Images.DIGITS_104PX, 256, 256, Images.DIGITS_104PX_GLYPHS, 104),
             }
 
@@ -94,23 +108,56 @@ if not mock_epaper():
         def draw_logo(self):
             self.__epd.display_base(self.__buffers['logo'])
 
-        def draw_static_area(self, temperature: float):
+        def draw_static_area(self, temperature: float, wind_direction: float, wind_speed: float, city_name: str):
             self.__frame_buffers['static_area'].fill_rect(
                 0, (self.__epd.height - Epaper.__static_area_height),
                 self.__epd.width, Epaper.__static_area_height,
                 0xff
             )
 
-            self.__fonts['temperature_40px'].draw(
+            max_chars = self.__epd.width // Epaper.__char_width
+            if len(city_name) > max_chars:
+                city_name = city_name[:max_chars - 3] + '...'
+            self.__frame_buffers['static_area'].text(
+                city_name,
+                0, self.__epd.height - Epaper.__static_area_height + Epaper.__line_height * 2,
+                0x00
+            )
+
+            wind_speed_text = f"{round(wind_speed, 1)}m/s"
+            text_length = len(wind_speed_text) * Epaper.__char_width
+            self.__frame_buffers['static_area'].text(
+                wind_speed_text,
+                self.__epd.width - text_length, self.__epd.height - Epaper.__static_area_height + Epaper.__line_height,
+                0x00
+            )
+
+            wind_dir_text = degrees_to_compass_direction(wind_direction)
+            text_length = len(wind_dir_text) * Epaper.__char_width
+            self.__frame_buffers['static_area'].text(
+                wind_dir_text,
+                self.__epd.width - text_length, self.__epd.height - Epaper.__static_area_height,
+                0x00
+            )
+
+            start = self.__epd.height - Epaper.__static_area_height
+            self.__reverse_part_of_buffer('static_area', start, start + Epaper.__line_height * 3)
+
+            self.__fonts['common_24px'].draw(
                 f'{round(temperature)}°C',
                 self.__frame_buffers['static_area'], self.__epd.width, self.__epd.height,
-                # 5 pixels of manual offset to make the text better centered vertically
-                0, self.__static_area_height - 5
+                0, 24,
+                align=Font.ALIGN.LEFT
             )
 
             self.__epd.display_base(self.__buffers['static_area'])
 
-        def draw_real_time_data(self, speed: float, gps_statistics: dict[str, float], map_preview: bytes):
+        def draw_real_time_data(self,
+                                speed: float,
+                                gps_statistics: dict[str, float],
+                                map_preview: bytes,
+                                wind_direction: float
+                                ):
             area_height = (self.__epd.height - Epaper.__static_area_height) // 2
             self.__frame_buffers['real_time_data'].fill_rect(
                 0, area_height,
@@ -123,25 +170,36 @@ if not mock_epaper():
                 self.__frame_buffers['real_time_data'],
                 self.__epd.width,
                 self.__epd.height - Epaper.__static_area_height,
-                # 22 pixels of manual offset to make the digits better centered vertically
                 0,
-                area_height - 22
+                84 + 4  # 84 is roughly maximum char height + manual offset for vertical centering
             )
 
-            # self.draw_text('Cyclocomputer', area_height + Epaper.__line_height)
-            gps_statistics_text = 'TEST'
-            text_length = len(gps_statistics_text) * Epaper.__char_width
+            # NOTE: spaces before label are needed to align them in vertical axis
+            gps_statistics_text = f"  Alt: {min(10000, max(-100, round(gps_statistics['altitude'])))}m"
             self.__frame_buffers['real_time_data'].text(
-                gps_statistics_text, (self.__epd.width - text_length) // 2, area_height + Epaper.__line_height, 0x00
+                gps_statistics_text, 0, area_height, 0x00
+            )
+            gps_statistics_text = f"Slope: {round(gps_statistics['slope'], 1)}"
+            self.__frame_buffers['real_time_data'].text(
+                gps_statistics_text, 0, area_height + Epaper.__line_height, 0x00
+            )
+            gps_statistics_text = f"  Dir: {degrees_to_compass_direction(gps_statistics['heading'])}"
+            self.__frame_buffers['real_time_data'].text(
+                gps_statistics_text, 0, area_height + Epaper.__line_height * 2, 0x00
             )
 
-            for y in range(Epaper.__line_height):
-                for x in range(self.__epd.width):
-                    index = (area_height + y) * self.__epd.width + x
-                    swap_index = (area_height + Epaper.__line_height - 1 - y) * self.__epd.width + x
-                    swap = self.__buffers['real_time_data'][index]
-                    self.__buffers['real_time_data'][index] = self.__buffers['real_time_data'][swap_index]
-                    self.__buffers['real_time_data'][swap_index] = swap
+            text_height = Epaper.__line_height * 3  # line height multiplied by number of text lines
+            self.__reverse_part_of_buffer('real_time_data', area_height, area_height + text_height)
+
+            self.__fonts['common_24px'].draw(
+                get_relative_wind_direction_arrow(gps_statistics['heading'], wind_direction),
+                self.__frame_buffers['real_time_data'],
+                self.__epd.width,
+                self.__epd.height - Epaper.__static_area_height,
+                self.__epd.width - 28,
+                area_height,
+                align=Font.ALIGN.LEFT
+            )
 
             for i in range(len(map_preview)):
                 self.__buffers['real_time_data'][i] = map_preview[i]
@@ -151,6 +209,25 @@ if not mock_epaper():
                 0, 0,
                 self.__epd.width, self.__epd.height - Epaper.__static_area_height
             )
+
+        def __reverse_part_of_buffer(self, buffer_name: str, start: int, end: int):
+            """
+            Reversing part of buffer.
+            :param buffer_name: name of buffer to reverse its part (must have 100% width)
+            :param start: vertical start position in pixels from top
+            :param end: vertical end position in pixels from top
+            """
+            start = start * (self.__epd.width // 8)
+            end = end * (self.__epd.width // 8)
+
+            size = (end - start) // 2
+            for i in range(size):
+                swap_index = end - 1 - i
+                swap = self.__buffers[buffer_name][start + i]
+                self.__buffers[buffer_name][start + i] = bits_order_reverse_lut[
+                    self.__buffers[buffer_name][swap_index]
+                ]
+                self.__buffers[buffer_name][swap_index] = bits_order_reverse_lut[swap]
 
 else:
     class Epaper:
@@ -183,8 +260,9 @@ else:
         def draw_logo(self):
             pass
 
-        def draw_static_area(self, temperature: float):
+        def draw_static_area(self, temperature: float, wind_direction: float, wind_speed: float, city_name: str):
             pass
 
-        def draw_real_time_data(self, speed: float, gps_statistics: dict[str, float], map_preview: bytes):
+        def draw_real_time_data(self, speed: float, gps_statistics: dict[str, float], map_preview: bytes,
+                                wind_direction: float):
             pass

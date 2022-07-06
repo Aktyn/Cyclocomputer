@@ -45,7 +45,8 @@ class Font:
 
     def draw(self, text: str,
              target: framebuf.FrameBuffer, target_width: int, target_height: int,
-             offset_x: int, offset_y: int, align: 'Font.ALIGN' = None):
+             offset_x: int, offset_y: int, align: 'Font.ALIGN' = None
+             ):
         text_width = self.__measure_text(text)
 
         pivot_x = target_width - offset_x

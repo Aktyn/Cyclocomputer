@@ -19,6 +19,7 @@ class Core:
         self.__running = False
         # TODO: sleeping mode activating after some time without detected activity with logo and some info view
         self.__mode = MODE.WELCOME_SCREEN
+        self.__refresh_main_view = False
 
         self.__previous_realtime_data: dict[str, float] = {
             'speed': 0,
@@ -34,6 +35,10 @@ class Core:
             'slope': 0,
             'heading': 0
         }
+
+        self.__wind_direction = 0
+        self.__wind_speed = 0
+        self.__city_name = '-'
 
         self.__temperature = Temperature()
         self.__speedometer = Speedometer(circumference=223)
@@ -63,11 +68,16 @@ class Core:
         # noinspection PyUnresolvedReferences
         _thread.start_new_thread(self.__second_thread, ())
 
-        # refreshed = False
         while self.__running:
-            # print(
-            #     f"Temperature: {self.__temperature.get_celsius()}°C; Speed: {self.__speedometer.current_speed}km/h"
-            # )
+            if self.__refresh_main_view:
+                self.__epaper.clear(init_only=True)
+                self.__draw_main_view()
+                try:
+                    time.sleep(1)
+                except KeyboardInterrupt:
+                    break
+                self.__refresh_main_view = False
+                continue
 
             if self.__mode == MODE.DATA_SCREEN:
                 self.__redraw_realtime_data()
@@ -78,8 +88,8 @@ class Core:
                     break
                 continue
             elif self.__speedometer.current_speed > 0:  # Some activity detected
-                self.__epaper.clear(init_only=True)
-                self.__draw_main_view()
+                self.__refresh_main_view = True
+                self.__mode = MODE.DATA_SCREEN
 
             try:
                 time.sleep(1)
@@ -87,13 +97,12 @@ class Core:
                 break
 
     def __draw_main_view(self):
-        # TODO: refresh it periodically but not too often
         print("Requesting settings data")
         self.__bluetooth.send_message(Message.REQUEST_SETTINGS)
 
-        self.__epaper.draw_static_area(self.__temperature.get_celsius())
-
-        self.__mode = MODE.DATA_SCREEN
+        self.__epaper.draw_static_area(
+            self.__temperature.get_celsius(), self.__wind_direction, self.__wind_speed, self.__city_name
+        )
 
     def __realtime_data_changed(self):
         # NOTE the rounding. It should match rounding parameters during realtime data rendering on epaper
@@ -115,10 +124,10 @@ class Core:
 
         return False
 
-    def __redraw_realtime_data(self):
+    def __redraw_realtime_data(self, force=False):
         data_changed = self.__realtime_data_changed()
 
-        if not data_changed:
+        if not data_changed and not force:
             return
 
         try:
@@ -136,14 +145,15 @@ class Core:
         self.__epaper.draw_real_time_data(
             self.__speedometer.current_speed,
             self.__gps_statistics,
-            self.__map_preview_data
+            self.__map_preview_data,
+            self.__wind_direction
         )
 
     def __on_bluetooth_connection(self):
         print("Bluetooth connection established")
         if self.__mode != MODE.DATA_SCREEN:
-            self.__epaper.clear(init_only=True)
-            self.__draw_main_view()
+            self.__refresh_main_view = True
+            self.__mode = MODE.DATA_SCREEN
 
     def __handle_message(self, message: int, data: bytes):
         if message == 1:  # SET_CIRCUMFERENCE
@@ -155,11 +165,19 @@ class Core:
             del self.__map_preview_data
             self.__map_preview_data = data
             self.__previous_realtime_data['map_preview_changed'] = True
-        elif message == 3:
+        elif message == 3:  # SET GPS STATISTICS
             print("Updating GPS statistics (altitude, slope and heading)")
             self.__gps_statistics['altitude'] = struct.unpack('f', data[:4])[0]
             self.__gps_statistics['slope'] = struct.unpack('f', data[4:8])[0]
             self.__gps_statistics['heading'] = struct.unpack('f', data[8:12])[0]
+        elif message == 4:  # SET WEATHER DATA
+            self.__wind_direction = struct.unpack('f', data[:4])[0]  # degrees
+            self.__wind_speed = struct.unpack('f', data[4:8])[0]  # m/s
+            self.__city_name = data[8:].decode('ascii')
+            print(
+                f"Updating weather data; wind direction: {self.__wind_direction}°; wind speed: {self.__wind_speed}m/s; city: {self.__city_name}")
+            if self.__mode == MODE.DATA_SCREEN:
+                self.__refresh_main_view = True
 
     def __handle_bluetooth_data(self, data: bytes):
         print(f"Received {len(data)} bytes")

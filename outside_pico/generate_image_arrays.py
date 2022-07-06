@@ -1,8 +1,6 @@
 from bmp_reader import BMPReader
 
 
-# TODO: different images storing system
-
 def rgb2d_to_mono_hlsb(rgb_array: list[list[list[int]]], width: int, height: int):
     # Make sure width * height is a multiple of 8
     padding = 0
@@ -21,7 +19,7 @@ def rgb2d_to_mono_hlsb(rgb_array: list[list[list[int]]], width: int, height: int
 
 
 if __name__ == '__main__':
-    for src in ['./logo.bmp', './temperature_40px.bmp', './digits_104px.bmp']:
+    for src in ['./logo.bmp', './temperature_40px.bmp', './digits_104px.bmp', './common_24px.bmp']:
         img = BMPReader(src)
         print(f"Source: {src}; width: {img.width}; height: {img.height}")
         print(rgb2d_to_mono_hlsb(img.get_pixels(), img.width, img.height))
