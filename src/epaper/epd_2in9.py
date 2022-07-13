@@ -249,5 +249,6 @@ class EPD_2in9:
         self.send_command(0x10)  # DEEP_SLEEP_MODE
         self.send_data(0x01)
 
-        self.__delay_ms(2000)
+        # self.__delay_ms(2000)
+        self.__delay_ms(100)
         self.module_exit()

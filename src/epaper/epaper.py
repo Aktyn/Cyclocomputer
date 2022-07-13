@@ -34,9 +34,6 @@ if not mock_epaper():
             self.__frame_buffers: dict[str, framebuf.FrameBuffer] = {}
             self.__prepare()
 
-            # self.__epd.init()
-            # self.__epd.clear(0xff)
-
         def close(self):
             self.__epd.sleep()
 
@@ -55,8 +52,8 @@ if not mock_epaper():
         def __prepare(self):
             self.__buffers['logo'] = bytearray([0xff] * (self.__epd.height * self.__epd.width // 8))
             offset_top = (self.__epd.height // 2) * self.__epd.width // 8
-            for index in range(len(Images.LOGO_BUFFER)):
-                bit = Images.LOGO_BUFFER[len(Images.LOGO_BUFFER) - 1 - index]
+            for index in range(len(Images.AUTHOR_LOGO)):
+                bit = Images.AUTHOR_LOGO[len(Images.AUTHOR_LOGO) - 1 - index]
                 self.__buffers['logo'][index + offset_top] = bits_order_reverse_lut[bit]
 
             self.__fonts = {
@@ -156,7 +153,8 @@ if not mock_epaper():
                                 speed: float,
                                 gps_statistics: dict[str, float],
                                 map_preview: bytes,
-                                wind_direction: float
+                                wind_direction: float,
+                                bluetooth_connection_status: bool
                                 ):
             area_height = (self.__epd.height - Epaper.__static_area_height) // 2
             self.__frame_buffers['real_time_data'].fill_rect(
@@ -164,7 +162,6 @@ if not mock_epaper():
                 self.__epd.width, area_height, 0xff
             )
 
-            # TODO: check duration of font drawing
             self.__fonts['digits_104px'].draw(
                 f'{round(speed)}',
                 self.__frame_buffers['real_time_data'],
@@ -201,8 +198,12 @@ if not mock_epaper():
                 align=Font.ALIGN.LEFT
             )
 
-            for i in range(len(map_preview)):
-                self.__buffers['real_time_data'][i] = map_preview[i]
+            if bluetooth_connection_status is True:
+                for i in range(len(map_preview)):
+                    self.__buffers['real_time_data'][i] = map_preview[i]
+            else:
+                for i in range(len(Images.BLUETOOTH_OFF)):
+                    self.__buffers['real_time_data'][i] = Images.BLUETOOTH_OFF[i]
 
             self.__epd.display_partial(
                 self.__buffers['real_time_data'],
@@ -264,5 +265,5 @@ else:
             pass
 
         def draw_real_time_data(self, speed: float, gps_statistics: dict[str, float], map_preview: bytes,
-                                wind_direction: float):
+                                wind_direction: float, bluetooth_connection_status: bool):
             pass

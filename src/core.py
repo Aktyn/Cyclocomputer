@@ -26,7 +26,8 @@ class Core:
             'altitude': 0,
             'slope': 0,
             'heading': 0,
-            'map_preview_changed': False
+            'map_preview_changed': False,
+            'paired': False
         }
         self.__bluetooth_data_buffer = bytes()
         self.__map_preview_data = bytes()
@@ -43,10 +44,10 @@ class Core:
         self.__temperature = Temperature()
         self.__speedometer = Speedometer(circumference=223)
         self.__epaper = Epaper()
+        self.__last_epaper_restart_time = time.ticks_us()
 
         self.__bluetooth = Bluetooth(
             connection_callback=self.__on_bluetooth_connection,
-            # TODO: draw bluetooth disabled icon in place of map until connection will be resored
             disconnect_callback=lambda: print("Bluetooth connection lost"),
             data_callback=self.__handle_bluetooth_data
         )
@@ -70,8 +71,16 @@ class Core:
 
         while self.__running:
             if self.__refresh_main_view:
-                self.__epaper.clear(init_only=True)
+                # 1e6 * 60 * 15 = 900000000 microseconds = 15 minutes
+                if time.ticks_diff(time.ticks_us(), self.__last_epaper_restart_time) > 900000000:
+                    self.__last_epaper_restart_time = time.ticks_us()
+                    print("Restarting epaper")
+                    self.__epaper.restart()
+                else:
+                    self.__epaper.clear(init_only=True)
+
                 self.__draw_main_view()
+
                 try:
                     time.sleep(1)
                 except KeyboardInterrupt:
@@ -87,9 +96,10 @@ class Core:
                 except KeyboardInterrupt:
                     break
                 continue
-            elif self.__speedometer.current_speed > 0:  # Some activity detected
+            elif self.__speedometer.current_speed >= 0.5:  # Some activity detected
                 self.__refresh_main_view = True
                 self.__mode = MODE.DATA_SCREEN
+                continue
 
             try:
                 time.sleep(1)
@@ -122,6 +132,9 @@ class Core:
         if self.__previous_realtime_data['map_preview_changed']:
             return True
 
+        if self.__previous_realtime_data['paired'] != self.__bluetooth.paired:
+            return True
+
         return False
 
     def __redraw_realtime_data(self, force=False):
@@ -141,12 +154,14 @@ class Core:
         self.__previous_realtime_data['altitude'] = self.__gps_statistics['altitude']
         self.__previous_realtime_data['slope'] = self.__gps_statistics['slope']
         self.__previous_realtime_data['heading'] = self.__gps_statistics['heading']
+        self.__previous_realtime_data['paired'] = self.__bluetooth.paired
         self.__previous_realtime_data['map_preview_changed'] = False
         self.__epaper.draw_real_time_data(
             self.__speedometer.current_speed,
             self.__gps_statistics,
             self.__map_preview_data,
-            self.__wind_direction
+            self.__wind_direction,
+            self.__bluetooth.paired
         )
 
     def __on_bluetooth_connection(self):

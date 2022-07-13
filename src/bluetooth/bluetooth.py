@@ -20,6 +20,10 @@ if not mock_bluetooth():
 
             self.__pico_ble = PicoBLE()
 
+        @property
+        def paired(self):
+            return self.__paired
+
         def __delay_next_update(self, milliseconds: int):
             self.__next_update_time = time.ticks_add(time.ticks_ms(), milliseconds)
 
@@ -45,7 +49,6 @@ if not mock_bluetooth():
 
             if not self.__paired:
                 print("Pairing...")
-                # self.__pico_ble.uart.write("Remove the interference")
                 data_rx = self.__pico_ble.uart.read(6)
                 if data_rx == b"ER+7\r\n":
                     print("Enable notify on the mobile phone\r\n")
@@ -65,7 +68,8 @@ if not mock_bluetooth():
                 # self.__pico_ble.uart.write(data)  # ??
 
         def send_message(self, message: int, data=bytes()):
-            # TODO: abort sending if not connected
+            if not self.__paired:
+                return
 
             buffer = STAMP + struct.pack('B', message) + struct.pack('I', len(data)) + data
             base64 = b64encode(buffer)
@@ -78,6 +82,10 @@ else:
         # noinspection PyUnusedLocal
         def __init__(self, connection_callback: callable, disconnect_callback: callable, data_callback: callable):
             pass
+
+        @property
+        def paired(self):
+            return False
 
         def update(self):
             pass
