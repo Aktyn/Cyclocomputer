@@ -225,6 +225,8 @@ class Core:
 
             try:
                 time.sleep_us(1)
+            except AttributeError:
+                time.sleep(1e-6)
             except KeyboardInterrupt:
                 break
         return

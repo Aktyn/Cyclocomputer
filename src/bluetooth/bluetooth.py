@@ -75,7 +75,8 @@ if not mock_bluetooth():
 
 else:
     class Bluetooth:
-        def __init__(self):
+        # noinspection PyUnusedLocal
+        def __init__(self, connection_callback: callable, disconnect_callback: callable, data_callback: callable):
             pass
 
         def update(self):
