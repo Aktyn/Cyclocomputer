@@ -202,8 +202,11 @@ if not mock_epaper():
                 for i in range(len(map_preview)):
                     self.__buffers['real_time_data'][i] = map_preview[i]
             else:
-                for i in range(len(Images.BLUETOOTH_OFF)):
-                    self.__buffers['real_time_data'][i] = Images.BLUETOOTH_OFF[i]
+                buffer_size = len(Images.BLUETOOTH_OFF)
+                for i in range(buffer_size):
+                    self.__buffers['real_time_data'][i] = bits_order_reverse_lut[
+                        Images.BLUETOOTH_OFF[buffer_size - 1 - i]
+                    ]
 
             self.__epd.display_partial(
                 self.__buffers['real_time_data'],

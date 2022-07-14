@@ -71,8 +71,8 @@ class Core:
 
         while self.__running:
             if self.__refresh_main_view:
-                # 1e6 * 60 * 15 = 900000000 microseconds = 15 minutes
-                if time.ticks_diff(time.ticks_us(), self.__last_epaper_restart_time) > 900000000:
+                # 1e6 * 60 * 10 = 600000000 microseconds = 10 minutes
+                if time.ticks_diff(time.ticks_us(), self.__last_epaper_restart_time) > 600000000:
                     self.__last_epaper_restart_time = time.ticks_us()
                     print("Restarting epaper")
                     self.__epaper.restart()
