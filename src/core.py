@@ -2,6 +2,7 @@ import _thread
 import struct
 import time
 
+from src.battery.battery import Battery
 from src.bluetooth.bluetooth import Bluetooth
 from src.bluetooth.message import Message, STAMP, is_stamp
 from src.epaper.epaper import Epaper
@@ -12,12 +13,12 @@ from src.temperature import Temperature
 class MODE:
     WELCOME_SCREEN = 0
     DATA_SCREEN = 1
+    SLEEP_MODE = 2
 
 
 class Core:
     def __init__(self):
         self.__running = False
-        # TODO: sleeping mode activating after some time without detected activity with logo and some info view
         self.__mode = MODE.WELCOME_SCREEN
         self.__refresh_main_view = False
 
@@ -42,9 +43,11 @@ class Core:
         self.__city_name = '-'
 
         self.__temperature = Temperature()
+        self.__battery = Battery()
         self.__speedometer = Speedometer(circumference=223)
         self.__epaper = Epaper()
         self.__last_epaper_restart_time = time.ticks_us()
+        self.__last_any_activity_time = time.ticks_us()
 
         self.__bluetooth = Bluetooth(
             connection_callback=self.__on_bluetooth_connection,
@@ -56,6 +59,29 @@ class Core:
         self.__running = False
         self.__epaper.close()
 
+    def __time_for_epaper_restart(self):
+        # 1e6 * 60 * 10 = 600000000 microseconds = 10 minutes
+        return time.ticks_diff(time.ticks_us(), self.__last_epaper_restart_time) > 600000000
+
+    def __time_for_sleep_mode(self):
+        # 1e6 * 60 * 30 = 1800000000 microseconds = 30 minutes
+        return time.ticks_diff(time.ticks_us(), self.__last_any_activity_time) > 1800000000
+
+    def __restart_epaper(self):
+        self.__last_epaper_restart_time = time.ticks_us()
+        print("Restarting epaper")
+        self.__epaper.restart()
+
+    def __start_sleep_mode(self):
+        self.__mode = MODE.SLEEP_MODE
+        self.__last_any_activity_time = time.ticks_us()
+        self.__draw_sleep_mode()
+
+    def __draw_sleep_mode(self):
+        self.__epaper.draw_logo()
+        top = self.__epaper.height // 2 - 64 + 32
+        self.__epaper.draw_text('Cyclocomputer\nMade by Aktyn\n\nWaiting for\nphone connection\nor speed results', top)
+
     def start(self):
         self.__running = True
 
@@ -63,19 +89,22 @@ class Core:
 
         top = self.__epaper.height // 2 - 64 + 32
         self.__epaper.draw_text('Cyclocomputer', top)
+        time.sleep(0.2)
         self.__epaper.draw_text('Cyclocomputer\nMade by Aktyn', top)
+        time.sleep(0.2)
         self.__epaper.draw_text('Cyclocomputer\nMade by Aktyn\n\nWaiting for\nphone connection\nor speed results', top)
+
+        # self.__mode = MODE.SLEEP_MODE  # TODO: remove after done with testing
 
         # noinspection PyUnresolvedReferences
         _thread.start_new_thread(self.__second_thread, ())
 
+        ticks_to_next_10sec_update = 0
+
         while self.__running:
             if self.__refresh_main_view:
-                # 1e6 * 60 * 10 = 600000000 microseconds = 10 minutes
-                if time.ticks_diff(time.ticks_us(), self.__last_epaper_restart_time) > 600000000:
-                    self.__last_epaper_restart_time = time.ticks_us()
-                    print("Restarting epaper")
-                    self.__epaper.restart()
+                if self.__time_for_epaper_restart():
+                    self.__restart_epaper()
                 else:
                     self.__epaper.clear(init_only=True)
 
@@ -89,6 +118,19 @@ class Core:
                 continue
 
             if self.__mode == MODE.DATA_SCREEN:
+                ticks_to_next_10sec_update += 1
+                if ticks_to_next_10sec_update > 10000:  # roughly every 10 seconds
+                    if self.__speedometer.current_speed > 0:
+                        self.__last_any_activity_time = time.ticks_us()
+                    elif self.__time_for_sleep_mode():
+                        self.__start_sleep_mode()
+                        continue
+
+                    if self.__time_for_epaper_restart():
+                        self.__restart_epaper()
+                        self.__draw_main_view()
+                        continue
+
                 self.__redraw_realtime_data()
 
                 try:
@@ -96,11 +138,13 @@ class Core:
                 except KeyboardInterrupt:
                     break
                 continue
-            elif self.__speedometer.current_speed >= 0.5:  # Some activity detected
+
+            if self.__speedometer.current_speed >= 0.5:  # Some activity detected
                 self.__refresh_main_view = True
                 self.__mode = MODE.DATA_SCREEN
                 continue
 
+            # Idle mode
             try:
                 time.sleep(1)
             except KeyboardInterrupt:
@@ -111,7 +155,8 @@ class Core:
         self.__bluetooth.send_message(Message.REQUEST_SETTINGS)
 
         self.__epaper.draw_static_area(
-            self.__temperature.get_celsius(), self.__wind_direction, self.__wind_speed, self.__city_name
+            self.__temperature.get_celsius(), self.__wind_direction, self.__wind_speed, self.__city_name,
+            self.__battery.level, self.__battery.charging
         )
 
     def __realtime_data_changed(self):
@@ -138,6 +183,9 @@ class Core:
         return False
 
     def __redraw_realtime_data(self, force=False):
+        if self.__epaper.busy:
+            return
+
         data_changed = self.__realtime_data_changed()
 
         if not data_changed and not force:
@@ -171,12 +219,15 @@ class Core:
             self.__mode = MODE.DATA_SCREEN
 
     def __handle_message(self, message: int, data: bytes):
+        self.__last_any_activity_time = time.ticks_us()
+
         if message == 1:  # SET_CIRCUMFERENCE
             circumference = struct.unpack('f', data)[0]
             self.__speedometer.set_circumference(circumference)
             print("Circumference set to:", circumference)
         elif message == 2:  # SET_MAP_PREVIEW
             print("Updating map preview image")
+            # TODO: add some bytes to start and end of this message to determine whether data was correctly received
             del self.__map_preview_data
             self.__map_preview_data = data
             self.__previous_realtime_data['map_preview_changed'] = True

@@ -92,9 +92,12 @@ class EPD_2in9:
         self.spi_write_byte([data])
         self.__digital_write(self.cs_pin, 1)
 
+    def is_busy(self):
+        return self.__digital_read(self.busy_pin) == 1  # 0: idle, 1: busy
+
     def read_busy(self):
         # print("e-Paper busy")
-        while self.__digital_read(self.busy_pin) == 1:  # 0: idle, 1: busy
+        while self.is_busy():
             self.__delay_ms(10)
         # print("e-Paper busy release")
 
