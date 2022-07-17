@@ -166,7 +166,7 @@ class Epaper:
                     self.__frame_buffers['static_area'].pixel(xx, yy, 0x00)
                     continue
 
-                b_i = float((x - 1) * (battery_height - 2) + (y - 1))
+                b_i = float((x - 1) * (battery_height - 2) + ((battery_height - 1 - y) - 1))
                 if b_i < fill_pixels_count * battery_level:
                     self.__frame_buffers['static_area'].pixel(xx, yy, 0x00)
                     continue

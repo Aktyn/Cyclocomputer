@@ -73,11 +73,15 @@ class Core:
         self.__epaper.restart()
 
     def __start_sleep_mode(self):
+        if self.__mode == MODE.SLEEP_MODE:
+            return
+        print("Entering sleep mode")
         self.__mode = MODE.SLEEP_MODE
         self.__last_any_activity_time = time.ticks_us()
         self.__draw_sleep_mode()
 
     def __draw_sleep_mode(self):
+        self.__epaper.clear()
         self.__epaper.draw_logo()
         top = self.__epaper.height // 2 - 64 + 32
         self.__epaper.draw_text('Cyclocomputer\nMade by Aktyn\n\nWaiting for\nphone connection\nor speed results', top)
@@ -93,8 +97,6 @@ class Core:
         self.__epaper.draw_text('Cyclocomputer\nMade by Aktyn', top)
         time.sleep(0.2)
         self.__epaper.draw_text('Cyclocomputer\nMade by Aktyn\n\nWaiting for\nphone connection\nor speed results', top)
-
-        # self.__mode = MODE.SLEEP_MODE  # TODO: remove after done with testing
 
         # noinspection PyUnresolvedReferences
         _thread.start_new_thread(self.__second_thread, ())
@@ -151,9 +153,12 @@ class Core:
                 break
 
     def __draw_main_view(self):
-        print("Requesting settings data")
-        self.__bluetooth.send_message(Message.REQUEST_SETTINGS)
+        if self.__bluetooth.paired:
+            print("Requesting settings data")
+            self.__bluetooth.send_message(Message.REQUEST_SETTINGS)
 
+        print(
+            f"Battery: {round(self.__battery.level * 100)}%; {'charging' if self.__battery.charging else 'discharging'}")
         self.__epaper.draw_static_area(
             self.__temperature.get_celsius(), self.__wind_direction, self.__wind_speed, self.__city_name,
             self.__battery.level, self.__battery.charging
@@ -192,12 +197,12 @@ class Core:
             return
 
         try:
-            print(f"Sending current speed update ({round(self.__speedometer.current_speed, 2)}km/h)")
+            # print(f"Sending current speed update ({round(self.__speedometer.current_speed, 2)}km/h)")
             self.__bluetooth.send_message(Message.CURRENT_SPEED, struct.pack('f', self.__speedometer.current_speed))
         except Exception as e:
             print(e)
 
-        print("Updating realtime data")
+        # print("Updating realtime data")
         self.__previous_realtime_data['speed'] = self.__speedometer.current_speed
         self.__previous_realtime_data['altitude'] = self.__gps_statistics['altitude']
         self.__previous_realtime_data['slope'] = self.__gps_statistics['slope']
@@ -224,7 +229,7 @@ class Core:
         if message == 1:  # SET_CIRCUMFERENCE
             circumference = struct.unpack('f', data)[0]
             self.__speedometer.set_circumference(circumference)
-            print("Circumference set to:", circumference)
+            print(f"Circumference set to {circumference} cm")
         elif message == 2:  # SET_MAP_PREVIEW
             print("Updating map preview image")
             # TODO: add some bytes to start and end of this message to determine whether data was correctly received
@@ -246,7 +251,7 @@ class Core:
                 self.__refresh_main_view = True
 
     def __handle_bluetooth_data(self, data: bytes):
-        print(f"Received {len(data)} bytes")
+        # print(f"Received {len(data)} bytes")
         self.__bluetooth_data_buffer += data
 
         metadata_size = 15
@@ -269,8 +274,8 @@ class Core:
                             (self.__bluetooth_data_buffer[len(STAMP) + 3] << 16) + \
                             (self.__bluetooth_data_buffer[len(STAMP) + 4] << 24)
             if len(self.__bluetooth_data_buffer) < raw_data_size + metadata_size:
-                print(
-                    f"Awaiting {raw_data_size + metadata_size - len(self.__bluetooth_data_buffer)} more bytes for message {message}")
+                # print(
+                #     f"Awaiting {raw_data_size + metadata_size - len(self.__bluetooth_data_buffer)} more bytes for message {message}")
                 return
             raw_data = self.__bluetooth_data_buffer[metadata_size:metadata_size + raw_data_size]
             print(f"Received message: {message}; raw data size: {raw_data_size};")
