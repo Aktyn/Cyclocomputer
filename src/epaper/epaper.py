@@ -214,7 +214,7 @@ class Epaper:
         self.__frame_buffers['real_time_data'].text(
             gps_statistics_text, 0, area_height, 0x00
         )
-        gps_statistics_text = f"Slope: {round(gps_statistics['slope'], 1)}"
+        gps_statistics_text = f"Slope: {round(gps_statistics['slope'], 1)}%"
         self.__frame_buffers['real_time_data'].text(
             gps_statistics_text, 0, area_height + Epaper.__line_height, 0x00
         )
