@@ -122,9 +122,9 @@ class Core:
             if self.__mode == MODE.DATA_SCREEN:
                 ticks_to_next_10sec_update += 1
                 if ticks_to_next_10sec_update > 10000:  # roughly every 10 seconds
-                    if self.__speedometer.current_speed > 0:
-                        self.__last_any_activity_time = time.ticks_us()
-                    elif self.__time_for_sleep_mode():
+                    ticks_to_next_10sec_update = 0
+
+                    if self.__time_for_sleep_mode():
                         self.__start_sleep_mode()
                         continue
 
@@ -202,6 +202,8 @@ class Core:
         except Exception as e:
             print(e)
 
+        self.__last_any_activity_time = time.ticks_us()
+
         # print("Updating realtime data")
         self.__previous_realtime_data['speed'] = self.__speedometer.current_speed
         self.__previous_realtime_data['altitude'] = self.__gps_statistics['altitude']
@@ -220,8 +222,8 @@ class Core:
     def __on_bluetooth_connection(self):
         print("Bluetooth connection established")
         if self.__mode != MODE.DATA_SCREEN:
-            self.__refresh_main_view = True
             self.__mode = MODE.DATA_SCREEN
+            self.__refresh_main_view = True
 
     def __handle_message(self, message: int, data: bytes):
         self.__last_any_activity_time = time.ticks_us()
@@ -293,6 +295,7 @@ class Core:
         while self.__running:
             self.__speedometer.update()
             self.__bluetooth.update()
+            self.__temperature.update()
 
             try:
                 time.sleep_us(1)

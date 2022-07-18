@@ -1,3 +1,5 @@
+# https://www.waveshare.com/wiki/Pico-ePaper-2.9
+
 # noinspection PyPackageRequirements
 from machine import Pin, SPI
 # noinspection PyPackageRequirements

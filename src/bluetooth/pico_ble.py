@@ -1,3 +1,5 @@
+# https://waveshare.com/wiki/Pico-BLE
+
 import time
 # noinspection PyPackageRequirements
 from machine import UART, Pin
