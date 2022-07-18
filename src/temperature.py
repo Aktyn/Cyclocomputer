@@ -29,7 +29,7 @@ class Temperature:
         if self.__next_check_ticks_counter >= 1000:
             self.__next_check_ticks_counter = 0
 
-            if time.ticks_diff(time.ticks_ms(), self.__last_measurement_timestamp) > 5000:  # 5 seconds
+            if time.ticks_diff(time.ticks_ms(), self.__last_measurement_timestamp) > 60000:  # 1 minute
                 self.__measurements_history.append(self.__measure_celsius())
                 if len(self.__measurements_history) > Temperature.HISTORY_SIZE:
                     self.__measurements_history.pop(0)

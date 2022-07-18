@@ -46,8 +46,8 @@ class Core:
         self.__battery = Battery()
         self.__speedometer = Speedometer(circumference=223)
         self.__epaper = Epaper()
-        self.__last_epaper_restart_time = time.ticks_us()
-        self.__last_any_activity_time = time.ticks_us()
+        self.__last_epaper_restart_time = time.ticks_ms()
+        self.__last_any_activity_time = time.ticks_ms()
 
         self.__bluetooth = Bluetooth(
             connection_callback=self.__on_bluetooth_connection,
@@ -60,15 +60,15 @@ class Core:
         self.__epaper.close()
 
     def __time_for_epaper_restart(self):
-        # 1e6 * 60 * 10 = 600000000 microseconds = 10 minutes
-        return time.ticks_diff(time.ticks_us(), self.__last_epaper_restart_time) > 600000000
+        # 1e3 * 60 * 10 = 600000 milliseconds = 10 minutes
+        return time.ticks_diff(time.ticks_ms(), self.__last_epaper_restart_time) > 600000
 
     def __time_for_sleep_mode(self):
-        # 1e6 * 60 * 30 = 1800000000 microseconds = 30 minutes
-        return time.ticks_diff(time.ticks_us(), self.__last_any_activity_time) > 1800000000
+        # 1e3 * 60 * 30 = 1800000 milliseconds = 30 minutes
+        return time.ticks_diff(time.ticks_ms(), self.__last_any_activity_time) > 1800000
 
     def __restart_epaper(self):
-        self.__last_epaper_restart_time = time.ticks_us()
+        self.__last_epaper_restart_time = time.ticks_ms()
         print("Restarting epaper")
         self.__epaper.restart()
 
@@ -77,7 +77,7 @@ class Core:
             return
         print("Entering sleep mode")
         self.__mode = MODE.SLEEP_MODE
-        self.__last_any_activity_time = time.ticks_us()
+        self.__last_any_activity_time = time.ticks_ms()
         self.__draw_sleep_mode()
 
     def __draw_sleep_mode(self):
@@ -111,9 +111,9 @@ class Core:
                     self.__epaper.clear(init_only=True)
 
                 self.__draw_main_view()
-
+                self.__redraw_realtime_data(force=True)
                 try:
-                    time.sleep(1)
+                    time.sleep_ms(1)
                 except KeyboardInterrupt:
                     break
                 self.__refresh_main_view = False
@@ -121,7 +121,7 @@ class Core:
 
             if self.__mode == MODE.DATA_SCREEN:
                 ticks_to_next_10sec_update += 1
-                if ticks_to_next_10sec_update > 10000:  # roughly every 10 seconds
+                if ticks_to_next_10sec_update > 5000:  # roughly every 10 seconds
                     ticks_to_next_10sec_update = 0
 
                     if self.__time_for_sleep_mode():
@@ -131,6 +131,7 @@ class Core:
                     if self.__time_for_epaper_restart():
                         self.__restart_epaper()
                         self.__draw_main_view()
+                        self.__redraw_realtime_data(force=True)
                         continue
 
                 self.__redraw_realtime_data()
@@ -202,7 +203,7 @@ class Core:
         except Exception as e:
             print(e)
 
-        self.__last_any_activity_time = time.ticks_us()
+        self.__last_any_activity_time = time.ticks_ms()
 
         # print("Updating realtime data")
         self.__previous_realtime_data['speed'] = self.__speedometer.current_speed
@@ -226,7 +227,7 @@ class Core:
             self.__refresh_main_view = True
 
     def __handle_message(self, message: int, data: bytes):
-        self.__last_any_activity_time = time.ticks_us()
+        self.__last_any_activity_time = time.ticks_ms()
 
         if message == 1:  # SET_CIRCUMFERENCE
             circumference = struct.unpack('f', data)[0]
