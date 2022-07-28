@@ -5,6 +5,7 @@ import time
 from src.battery.battery import Battery
 from src.bluetooth.bluetooth import Bluetooth
 from src.bluetooth.message import Message, STAMP, is_stamp, is_correct_map_preview_data, IMAGE_DATA_PREFIX
+from src.common.utils import parse_time
 from src.epaper.epaper import Epaper
 from src.speedometer import Speedometer
 from src.temperature import Temperature
@@ -300,12 +301,14 @@ class Core:
                 up = struct.unpack('f', data[12:16])[0]
                 down = struct.unpack('f', data[16:20])[0]
 
-                changed = \
-                    ride_duration != self.__ride_progress['ride_duration'] or \
-                    time_in_motion != self.__ride_progress['time_in_motion'] or \
-                    round(traveled_distance * 1000) != round(self.__ride_progress['traveled_distance'] * 1000) or \
-                    round(up) != round(self.__ride_progress['up']) or \
-                    round(down) != round(self.__ride_progress['down'])
+                changed = ride_duration != self.__ride_progress['rideDuration'] or \
+                          time_in_motion != self.__ride_progress['timeInMotion'] or \
+                          round(traveled_distance * 1000) != round(self.__ride_progress['traveledDistance'] * 1000) or \
+                          round(up) != round(self.__ride_progress['altitudeChange']['up']) or \
+                          round(down) != round(self.__ride_progress['altitudeChange']['down'])
+
+                print(
+                    f"Received ride progress data: duration: {parse_time(round(ride_duration))}; time in motion: {parse_time(round(time_in_motion))}; traveled distance: {traveled_distance}km; up: {up}m; down: {down}m; changed: {changed}")
 
                 self.__ride_progress['rideDuration'] = ride_duration
                 self.__ride_progress['timeInMotion'] = time_in_motion
@@ -346,7 +349,7 @@ class Core:
             try:
                 self.__handle_message(message, raw_data)
             except Exception as e:
-                print(e)
+                print(f"Exception: {e}")
             self.__bluetooth_data_buffer = self.__bluetooth_data_buffer[raw_data_size + metadata_size:]
             if len(self.__bluetooth_data_buffer) >= metadata_size:
                 self.__handle_bluetooth_data(bytes())

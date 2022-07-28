@@ -34,11 +34,11 @@ __time_units = [
         'scale': 1000 * 60 * 60,
     },
     {
-        'name': 'm',
+        'name': 'min',
         'scale': 1000 * 60,
     },
     {
-        'name': 's',
+        'name': 'sec',
         'scale': 1000,
     },
     {
@@ -48,8 +48,8 @@ __time_units = [
 ]
 
 
-def parse_time(milliseconds: int, round_to='m'):
-    if round_to not in ['ms', 's', 'm', 'h', 'd']:
+def parse_time(milliseconds: int, round_to='min'):
+    if round_to not in ['ms', 'sec', 'min', 'h', 'd']:
         raise ValueError(f"Invalid roundTo value: {round_to}")
 
     round_index = __time_units.index(next(x for x in __time_units if x['name'] == round_to))

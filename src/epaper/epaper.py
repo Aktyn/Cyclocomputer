@@ -200,7 +200,7 @@ class Epaper:
             self.__epd.width, area_height, 0xff
         )
 
-        if round(speed) > 0:
+        if round(speed) > 0 or ride_progress['rideDuration'] == 0:
             self.__fonts['digits_104px'].draw(
                 f'{round(speed)}',
                 self.__frame_buffers['real_time_data'],
@@ -210,29 +210,21 @@ class Epaper:
                 84 + 4  # 84 is roughly maximum char height + manual offset for vertical centering
             )
         else:
-            ride_duration = f"Ride duration: {parse_time(round(ride_progress['rideDuration']))}"
-            time_in_motion = f"In motion: {parse_time(round(ride_progress['timeInMotion']))}"
-            traveled_distance = f"Traveled: {round(ride_progress['traveledDistance'], 1)}"
-            altitude_change = f"Alt change: {round(ride_progress['altitudeChange']['up'])}m up, {round(ride_progress['altitudeChange']['down'])}m down"
-            # altitude_change_up = round(ride_progress['altitudeChange']['up'])
-            # altitude_change_down = round(ride_progress['altitudeChange']['down'])
+            progress_text = f"Ride duration:\n{parse_time(round(ride_progress['rideDuration']))}\n" + \
+                            f"Time in motion:\n{parse_time(round(ride_progress['timeInMotion']))}\n" + \
+                            f"Traveled:\n{round(ride_progress['traveledDistance'], 1)}km\n" + \
+                            f"Altitude change:\n+{round(ride_progress['altitudeChange']['up'])}m | -{round(ride_progress['altitudeChange']['down'])}m"
 
             start = area_height + Epaper.__line_height * 4
 
-            self.__frame_buffers['real_time_data'].text(
-                altitude_change, 0, start, 0x00
-            )
-            self.__frame_buffers['real_time_data'].text(
-                traveled_distance, 0, start + Epaper.__line_height, 0x00
-            )
-            self.__frame_buffers['real_time_data'].text(
-                time_in_motion, 0, start + Epaper.__line_height * 2, 0x00
-            )
-            self.__frame_buffers['real_time_data'].text(
-                ride_duration, 0, start + Epaper.__line_height * 3, 0x00
-            )
+            lines = progress_text.split('\n')
+            for i, line in enumerate(lines):
+                text_length = len(line) * Epaper.__char_width
+                self.__frame_buffers['real_time_data'].text(
+                    line, (self.__epd.width - text_length) // 2, start + Epaper.__line_height * i, 0x00
+                )
 
-            self.__reverse_part_of_buffer('real_time_data', start, start + Epaper.__line_height * 5)
+            self.__reverse_part_of_buffer('real_time_data', start, start + Epaper.__line_height * len(lines))
 
         # NOTE: spaces before label are needed to align them in vertical axis
         gps_statistics_text = f"  Alt: {min(10000, max(-100, round(gps_statistics['altitude'])))}m"
