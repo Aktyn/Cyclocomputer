@@ -3,7 +3,7 @@ from src.epaper.images import Images
 from src.epaper.epd_2in9 import EPD_2in9
 from src.epaper.font import Font
 from src.epaper.common import bits_order_reverse_lut, reverse_bytearray
-from src.common.utils import degrees_to_compass_direction
+from src.common.utils import degrees_to_compass_direction, parse_time
 
 __arrows = ['⬆', '⬈', '➡', '⬊', '⬇', '⬋', '⬅', '⬉', '⬆']
 
@@ -191,8 +191,8 @@ class Epaper:
         self.__epd.display_base(self.__buffers['static_area'])
 
     def draw_real_time_data(
-            self, speed: float, gps_statistics: dict[str, float], map_preview: bytes, wind_direction: float,
-            bluetooth_connection_status: bool
+            self, speed: float, ride_progress: dict[str, any], gps_statistics: dict[str, float], map_preview: bytes,
+            wind_direction: float, bluetooth_connection_status: bool
     ):
         area_height = (self.__epd.height - Epaper.__static_area_height) // 2
         self.__frame_buffers['real_time_data'].fill_rect(
@@ -200,14 +200,39 @@ class Epaper:
             self.__epd.width, area_height, 0xff
         )
 
-        self.__fonts['digits_104px'].draw(
-            f'{round(speed)}',
-            self.__frame_buffers['real_time_data'],
-            self.__epd.width,
-            self.__epd.height - Epaper.__static_area_height,
-            0,
-            84 + 4  # 84 is roughly maximum char height + manual offset for vertical centering
-        )
+        if round(speed) > 0:
+            self.__fonts['digits_104px'].draw(
+                f'{round(speed)}',
+                self.__frame_buffers['real_time_data'],
+                self.__epd.width,
+                self.__epd.height - Epaper.__static_area_height,
+                0,
+                84 + 4  # 84 is roughly maximum char height + manual offset for vertical centering
+            )
+        else:
+            ride_duration = f"Ride duration: {parse_time(round(ride_progress['rideDuration']))}"
+            time_in_motion = f"In motion: {parse_time(round(ride_progress['timeInMotion']))}"
+            traveled_distance = f"Traveled: {round(ride_progress['traveledDistance'], 1)}"
+            altitude_change = f"Alt change: {round(ride_progress['altitudeChange']['up'])}m up, {round(ride_progress['altitudeChange']['down'])}m down"
+            # altitude_change_up = round(ride_progress['altitudeChange']['up'])
+            # altitude_change_down = round(ride_progress['altitudeChange']['down'])
+
+            start = area_height + Epaper.__line_height * 4
+
+            self.__frame_buffers['real_time_data'].text(
+                altitude_change, 0, start, 0x00
+            )
+            self.__frame_buffers['real_time_data'].text(
+                traveled_distance, 0, start + Epaper.__line_height, 0x00
+            )
+            self.__frame_buffers['real_time_data'].text(
+                time_in_motion, 0, start + Epaper.__line_height * 2, 0x00
+            )
+            self.__frame_buffers['real_time_data'].text(
+                ride_duration, 0, start + Epaper.__line_height * 3, 0x00
+            )
+
+            self.__reverse_part_of_buffer('real_time_data', start, start + Epaper.__line_height * 5)
 
         # NOTE: spaces before label are needed to align them in vertical axis
         gps_statistics_text = f"  Alt: {min(10000, max(-100, round(gps_statistics['altitude'])))}m"

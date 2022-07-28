@@ -4,7 +4,7 @@ import time
 
 from src.battery.battery import Battery
 from src.bluetooth.bluetooth import Bluetooth
-from src.bluetooth.message import Message, STAMP, is_stamp
+from src.bluetooth.message import Message, STAMP, is_stamp, is_correct_map_preview_data, IMAGE_DATA_PREFIX
 from src.epaper.epaper import Epaper
 from src.speedometer import Speedometer
 from src.temperature import Temperature
@@ -28,14 +28,25 @@ class Core:
             'slope': 0,
             'heading': 0,
             'map_preview_changed': False,
+            'ride_progress_changed': False,
             'paired': False
         }
         self.__bluetooth_data_buffer = bytes()
-        self.__map_preview_data = bytes()
+        self.__map_preview_data = bytes([0xff] * (128 * 128 // 8))
         self.__gps_statistics = {
-            'altitude': 0,
-            'slope': 0,
-            'heading': 0
+            'altitude': 0.,
+            'slope': 0.,
+            'heading': 0.
+        }
+
+        self.__ride_progress = {
+            'rideDuration': 0.,
+            'timeInMotion': 0.,
+            'traveledDistance': 0.,
+            'altitudeChange': {
+                'up': 0.,
+                'down': 0.
+            }
         }
 
         self.__wind_direction = 0
@@ -46,6 +57,7 @@ class Core:
         self.__battery = Battery()
         self.__speedometer = Speedometer(circumference=223)
         self.__epaper = Epaper()
+        self.__last_ride_progress_update_time = time.ticks_ms()
         self.__last_epaper_restart_time = time.ticks_ms()
         self.__last_any_activity_time = time.ticks_ms()
 
@@ -59,6 +71,16 @@ class Core:
         self.__running = False
         self.__epaper.close()
 
+    def __time_for_ride_progress_update(self):
+        if not self.__bluetooth.paired:
+            return False
+
+        if round(self.__speedometer.current_speed) == 0 and round(self.__previous_realtime_data['speed']) > 0:
+            return True
+
+        # 1e3 * 60 * 1 = 60000 milliseconds = 1 minute
+        return time.ticks_diff(time.ticks_ms(), self.__last_ride_progress_update_time) > 60000
+
     def __time_for_epaper_restart(self):
         # 1e3 * 60 * 10 = 600000 milliseconds = 10 minutes
         return time.ticks_diff(time.ticks_ms(), self.__last_epaper_restart_time) > 600000
@@ -66,6 +88,11 @@ class Core:
     def __time_for_sleep_mode(self):
         # 1e3 * 60 * 30 = 1800000 milliseconds = 30 minutes
         return time.ticks_diff(time.ticks_ms(), self.__last_any_activity_time) > 1800000
+
+    def __request_ride_progress_update(self):
+        self.__last_ride_progress_update_time = time.ticks_ms()
+        print("Requesting ride progress update")
+        self.__bluetooth.send_message(Message.REQUEST_PROGRESS_DATA)
 
     def __restart_epaper(self):
         self.__last_epaper_restart_time = time.ticks_ms()
@@ -134,6 +161,10 @@ class Core:
                         self.__redraw_realtime_data(force=True)
                         continue
 
+                    if self.__time_for_ride_progress_update():
+                        self.__request_ride_progress_update()
+                        continue
+
                 self.__redraw_realtime_data()
 
                 try:
@@ -183,6 +214,9 @@ class Core:
         if self.__previous_realtime_data['map_preview_changed']:
             return True
 
+        if round(self.__speedometer.current_speed) == 0 and self.__previous_realtime_data['ride_progress_changed']:
+            return True
+
         if self.__previous_realtime_data['paired'] != self.__bluetooth.paired:
             return True
 
@@ -199,21 +233,22 @@ class Core:
 
         try:
             # print(f"Sending current speed update ({round(self.__speedometer.current_speed, 2)}km/h)")
-            self.__bluetooth.send_message(Message.CURRENT_SPEED, struct.pack('f', self.__speedometer.current_speed))
+            self.__bluetooth.send_message(Message.UPDATE_SPEED, struct.pack('f', self.__speedometer.current_speed))
         except Exception as e:
             print(e)
 
         self.__last_any_activity_time = time.ticks_ms()
 
-        # print("Updating realtime data")
         self.__previous_realtime_data['speed'] = self.__speedometer.current_speed
         self.__previous_realtime_data['altitude'] = self.__gps_statistics['altitude']
         self.__previous_realtime_data['slope'] = self.__gps_statistics['slope']
         self.__previous_realtime_data['heading'] = self.__gps_statistics['heading']
         self.__previous_realtime_data['paired'] = self.__bluetooth.paired
         self.__previous_realtime_data['map_preview_changed'] = False
+        self.__previous_realtime_data['ride_progress_changed'] = False
         self.__epaper.draw_real_time_data(
             self.__speedometer.current_speed,
+            self.__ride_progress,
             self.__gps_statistics,
             self.__map_preview_data,
             self.__wind_direction,
@@ -234,11 +269,16 @@ class Core:
             self.__speedometer.set_circumference(circumference)
             print(f"Circumference set to {circumference} cm")
         elif message == 2:  # SET_MAP_PREVIEW
-            print("Updating map preview image")
-            # TODO: add some bytes to start and end of this message to determine whether data was correctly received
-            del self.__map_preview_data
-            self.__map_preview_data = data
-            self.__previous_realtime_data['map_preview_changed'] = True
+            if is_correct_map_preview_data(data):
+                print("Updating map preview image")
+                del self.__map_preview_data
+                self.__map_preview_data = data[
+                                          len(IMAGE_DATA_PREFIX):
+                                          len(IMAGE_DATA_PREFIX) + (128 * 128 // 8)
+                                          ]
+                self.__previous_realtime_data['map_preview_changed'] = True
+            else:
+                print("Invalid map preview data")
         elif message == 3:  # SET GPS STATISTICS
             print("Updating GPS statistics (altitude, slope and heading)")
             self.__gps_statistics['altitude'] = struct.unpack('f', data[:4])[0]
@@ -252,6 +292,27 @@ class Core:
                 f"Updating weather data; wind direction: {self.__wind_direction}°; wind speed: {self.__wind_speed}m/s; city: {self.__city_name}")
             if self.__mode == MODE.DATA_SCREEN:
                 self.__refresh_main_view = True
+        elif message == 5:  # SET_PROGRESS_DATA
+            if len(data) >= 20:
+                ride_duration = struct.unpack('f', data[:4])[0]
+                time_in_motion = struct.unpack('f', data[4:8])[0]
+                traveled_distance = struct.unpack('f', data[8:12])[0]
+                up = struct.unpack('f', data[12:16])[0]
+                down = struct.unpack('f', data[16:20])[0]
+
+                changed = \
+                    ride_duration != self.__ride_progress['ride_duration'] or \
+                    time_in_motion != self.__ride_progress['time_in_motion'] or \
+                    round(traveled_distance * 1000) != round(self.__ride_progress['traveled_distance'] * 1000) or \
+                    round(up) != round(self.__ride_progress['up']) or \
+                    round(down) != round(self.__ride_progress['down'])
+
+                self.__ride_progress['rideDuration'] = ride_duration
+                self.__ride_progress['timeInMotion'] = time_in_motion
+                self.__ride_progress['traveledDistance'] = traveled_distance
+                self.__ride_progress['altitudeChange']['up'] = up
+                self.__ride_progress['altitudeChange']['down'] = down
+                self.__previous_realtime_data['ride_progress_changed'] = changed
 
     def __handle_bluetooth_data(self, data: bytes):
         # print(f"Received {len(data)} bytes")

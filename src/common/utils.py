@@ -22,3 +22,48 @@ def linearly_weighted_average(values: list[float], reverse=False):
         sum_ += value * (index + 1 if not reverse else values_count - index)
 
     return sum_ / weights_sum
+
+
+__time_units = [
+    {
+        'name': 'd',
+        'scale': 1000 * 60 * 60 * 24,
+    },
+    {
+        'name': 'h',
+        'scale': 1000 * 60 * 60,
+    },
+    {
+        'name': 'm',
+        'scale': 1000 * 60,
+    },
+    {
+        'name': 's',
+        'scale': 1000,
+    },
+    {
+        'name': 'ms',
+        'scale': 1,
+    },
+]
+
+
+def parse_time(milliseconds: int, round_to='m'):
+    if round_to not in ['ms', 's', 'm', 'h', 'd']:
+        raise ValueError(f"Invalid roundTo value: {round_to}")
+
+    round_index = __time_units.index(next(x for x in __time_units if x['name'] == round_to))
+    if milliseconds == 0 or milliseconds < __time_units[round_index]['scale']:
+        return f'0 {round_to}'
+
+    milliseconds = round(milliseconds)
+
+    unit_strings: list[str] = []
+    for index, unit in enumerate(__time_units):
+        if index <= round_index and milliseconds >= unit['scale']:
+            unit_value = milliseconds // unit['scale']
+            if unit_value > 0:
+                milliseconds -= unit_value * unit['scale']
+                unit_strings.append(f'{unit_value} {unit["name"]}')
+
+    return ' '.join(unit_strings)
