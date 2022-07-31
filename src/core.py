@@ -83,8 +83,8 @@ class Core:
         return time.ticks_diff(time.ticks_ms(), self.__last_ride_progress_update_time) > 60000
 
     def __time_for_epaper_restart(self):
-        # 1e3 * 60 * 10 = 600000 milliseconds = 10 minutes
-        return time.ticks_diff(time.ticks_ms(), self.__last_epaper_restart_time) > 600000
+        # 1e3 * 60 * 7 = 420000 milliseconds = 7 minutes
+        return time.ticks_diff(time.ticks_ms(), self.__last_epaper_restart_time) > 420000
 
     def __time_for_sleep_mode(self):
         # 1e3 * 60 * 30 = 1800000 milliseconds = 30 minutes
@@ -133,10 +133,10 @@ class Core:
 
         while self.__running:
             if self.__refresh_main_view:
-                if self.__time_for_epaper_restart():
-                    self.__restart_epaper()
-                else:
-                    self.__epaper.clear(init_only=True)
+                # if self.__time_for_epaper_restart():
+                self.__restart_epaper()
+                # else:
+                #     self.__epaper.clear(init_only=True)
 
                 self.__draw_main_view()
                 self.__redraw_realtime_data(force=True)
