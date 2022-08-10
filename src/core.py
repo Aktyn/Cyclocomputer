@@ -50,6 +50,9 @@ class Core:
             }
         }
 
+        # 1 - background state (does not send bluetooth messages); 0 - foreground state
+        self.__mobile_app_state = 0
+
         self.__wind_direction = 0
         self.__wind_speed = 0
         self.__city_name = '-'
@@ -92,8 +95,9 @@ class Core:
 
     def __request_ride_progress_update(self):
         self.__last_ride_progress_update_time = time.ticks_ms()
-        print("Requesting ride progress update")
-        self.__bluetooth.send_message(Message.REQUEST_PROGRESS_DATA)
+        if self.__mobile_app_state == 0:
+            print("Requesting ride progress update")
+            self.__bluetooth.send_message(Message.REQUEST_PROGRESS_DATA)
 
     def __restart_epaper(self):
         self.__last_epaper_restart_time = time.ticks_ms()
@@ -186,7 +190,7 @@ class Core:
                 break
 
     def __draw_main_view(self):
-        if self.__bluetooth.paired:
+        if self.__bluetooth.paired and self.__mobile_app_state == 0:
             print("Requesting settings data")
             self.__bluetooth.send_message(Message.REQUEST_SETTINGS)
 
@@ -233,8 +237,9 @@ class Core:
             return
 
         try:
-            # print(f"Sending current speed update ({round(self.__speedometer.current_speed, 2)}km/h)")
-            self.__bluetooth.send_message(Message.UPDATE_SPEED, struct.pack('f', self.__speedometer.current_speed))
+            if self.__mobile_app_state == 0:
+                print(f"Sending current speed update ({round(self.__speedometer.current_speed, 2)}km/h)")
+                self.__bluetooth.send_message(Message.UPDATE_SPEED, struct.pack('f', self.__speedometer.current_speed))
         except Exception as e:
             print(e)
 
@@ -316,6 +321,11 @@ class Core:
                 self.__ride_progress['altitudeChange']['up'] = up
                 self.__ride_progress['altitudeChange']['down'] = down
                 self.__previous_realtime_data['ride_progress_changed'] = changed
+        elif message == 6:  # SET_MOBILE_APP_STATE
+            if len(data) >= 1:
+                state: int = struct.unpack('b', data[:1])[0]
+                print(f"Mobile app state changed: {state}")
+                self.__mobile_app_state = state
 
     def __handle_bluetooth_data(self, data: bytes):
         # print(f"Received {len(data)} bytes")
