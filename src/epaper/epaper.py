@@ -1,4 +1,6 @@
 import framebuf
+from math import pi
+
 from src.epaper.images import Images
 from src.epaper.epd_2in9 import EPD_2in9
 from src.epaper.font import Font
@@ -235,7 +237,8 @@ class Epaper:
         self.__frame_buffers['real_time_data'].text(
             gps_statistics_text, 0, area_height + Epaper.__line_height, 0x00
         )
-        gps_statistics_text = f"  Dir: {degrees_to_compass_direction(gps_statistics['heading'])}"
+        # gps_statistics_text = f"  Dir: {degrees_to_compass_direction(gps_statistics['heading'])}"
+        gps_statistics_text = f"Turn {round(gps_statistics['turnAngle']*180/pi)}deg in {round(gps_statistics['turnDistance'])}m"
         self.__frame_buffers['real_time_data'].text(
             gps_statistics_text, 0, area_height + Epaper.__line_height * 2, 0x00
         )

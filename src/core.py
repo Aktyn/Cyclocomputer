@@ -28,6 +28,8 @@ class Core:
             'altitude': 0,
             'slope': 0,
             'heading': 0,
+            'turnDistance': 0,
+            'turnAngle': 0,
             'map_preview_changed': False,
             'ride_progress_changed': False,
             'paired': False
@@ -37,7 +39,9 @@ class Core:
         self.__gps_statistics = {
             'altitude': 0.,
             'slope': 0.,
-            'heading': 0.
+            'heading': 0.,
+            'turnDistance': 0.,
+            'turnAngle': 0.
         }
 
         self.__ride_progress = {
@@ -216,6 +220,14 @@ class Core:
         if round(self.__previous_realtime_data['heading']) != round(self.__gps_statistics['heading']):
             return True
 
+        if round(self.__previous_realtime_data['turnDistance']) != round(self.__gps_statistics['turnDistance']):
+            return True
+
+        # 57.2957795131 = 180 / pi
+        if round(self.__previous_realtime_data['turnAngle'] * 57.2957795131) != \
+                round(self.__gps_statistics['turnAngle'] * 57.2957795131):
+            return True
+
         if self.__previous_realtime_data['map_preview_changed']:
             return True
 
@@ -249,6 +261,8 @@ class Core:
         self.__previous_realtime_data['altitude'] = self.__gps_statistics['altitude']
         self.__previous_realtime_data['slope'] = self.__gps_statistics['slope']
         self.__previous_realtime_data['heading'] = self.__gps_statistics['heading']
+        self.__previous_realtime_data['turnDistance'] = self.__gps_statistics['turnDistance']
+        self.__previous_realtime_data['turnAngle'] = self.__gps_statistics['turnAngle']
         self.__previous_realtime_data['paired'] = self.__bluetooth.paired
         self.__previous_realtime_data['map_preview_changed'] = False
         self.__previous_realtime_data['ride_progress_changed'] = False
@@ -286,10 +300,14 @@ class Core:
             else:
                 print("Invalid map preview data")
         elif message == 3:  # SET GPS STATISTICS
-            print("Updating GPS statistics (altitude, slope and heading)")
-            self.__gps_statistics['altitude'] = struct.unpack('f', data[:4])[0]
-            self.__gps_statistics['slope'] = struct.unpack('f', data[4:8])[0]
-            self.__gps_statistics['heading'] = struct.unpack('f', data[8:12])[0]
+            if len(data) >= 20:
+                print("Updating GPS statistics (altitude, slope and heading)")
+                self.__gps_statistics['altitude'] = struct.unpack('f', data[:4])[0]
+                self.__gps_statistics['slope'] = struct.unpack('f', data[4:8])[0]
+                # NOTE: heading information is now deprecated (13.08.2022)
+                self.__gps_statistics['heading'] = struct.unpack('f', data[8:12])[0]
+                self.__gps_statistics['turnDistance'] = struct.unpack('f', data[12:16])[0]
+                self.__gps_statistics['turnAngle'] = struct.unpack('f', data[16:20])[0]
         elif message == 4:  # SET WEATHER DATA
             self.__wind_direction = struct.unpack('f', data[:4])[0]  # degrees
             self.__wind_speed = struct.unpack('f', data[4:8])[0]  # m/s
