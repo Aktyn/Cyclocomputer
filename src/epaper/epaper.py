@@ -238,10 +238,12 @@ class Epaper:
             gps_statistics_text, 0, area_height + Epaper.__line_height, 0x00
         )
         # gps_statistics_text = f"  Dir: {degrees_to_compass_direction(gps_statistics['heading'])}"
-        gps_statistics_text = f"Turn {round(gps_statistics['turnAngle']*180/pi)}deg in {round(gps_statistics['turnDistance'])}m"
-        self.__frame_buffers['real_time_data'].text(
-            gps_statistics_text, 0, area_height + Epaper.__line_height * 2, 0x00
-        )
+        if gps_statistics['turnDistance'] > 0:
+            gps_statistics_text = "Turn back" if gps_statistics['turnAngle'] >= pi else \
+                f"{round(gps_statistics['turnAngle'] * 180 / pi)}d | {round(gps_statistics['turnDistance'])}m"
+            self.__frame_buffers['real_time_data'].text(
+                gps_statistics_text, 0, area_height + Epaper.__line_height * 2, 0x00
+            )
 
         text_height = Epaper.__line_height * 3  # line height multiplied by number of text lines
         self.__reverse_part_of_buffer('real_time_data', area_height, area_height + text_height)
